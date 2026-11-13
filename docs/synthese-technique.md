@@ -2,9 +2,9 @@
 
 **Date d'investigation :** 9, 11 et 13 novembre 2026
 **Environnement testé :** pré-production (`https://hackbnb.dashbox.cloud`)
-**Outils utilisés :** Burp Suite Community Edition (Repeater, Intruder), curl, Gitleaks
+**Outils utilisés :** Burp Suite Community Edition (Repeater, Intruder), curl, Gitleaks, git
 
-Trace écrite des vulnérabilités identifiées dans le rapport de pentest (annexe 5), reproduites et prouvées en environnement de pré-production.
+Trace écrite des vulnérabilités identifiées dans le rapport de pentest (annexe 5) : D1-D5, D7 et D8 sont reproduites et prouvées directement sur l'environnement de pré-production ; D6 est établie par audit du dépôt Git (historique et code actuel).
 
 ---
 
@@ -145,7 +145,7 @@ Payload : `checkout_session_id=../../checkout/sessions%23`
 
 `HTTP/2 200 OK` : la réponse contient les sessions de paiement Stripe de **tous les clients**, pas seulement celles liées à la réservation `57TDGUK1`.
 
-**Finding critique additionnel** : une des sessions retournées expose, dans son champ `success_url`, le `checkout_confirmation_secret` **en clair** d'une autre réservation (`VM4UXB28`, `payment_status: "unpaid"`) :
+**Observation complémentaire (chaînage D3 → D4)** : une des sessions retournées expose, dans son champ `success_url`, le `checkout_confirmation_secret` **en clair** d'une autre réservation (`VM4UXB28`, `payment_status: "unpaid"`) :
 ```
 https://hackbnb.dashbox.cloud/booking/VM4UXB28?checkout_confirmation_secret=2cac7e5ac3ef2115fc18c06bbc5cdbeac325c1966f50184f0ed7b7e3ad1d61c265220cc0eaf9c9933de7883324d8efdd008ad8fe79a9624c818a802a8933f1c5
 ```
@@ -206,7 +206,9 @@ GET /api/bookings/XFX6Q5I2 HTTP/2
 
 **Recommandation** : générer le secret avec une source d'aléa cryptographiquement sûre (`secrets.token_hex(32)` en Python), indépendante de toute information prévisible comme un timestamp.
 
-**Observation complémentaire** : combiné à D3 (SSRF), ce secret peut aussi être lu directement dans le `success_url` d'une session Stripe d'un autre client (cf. finding D3), rendant le bruteforce ci-dessus même superflu pour un attaquant qui aurait déjà exploité D3.
+**Observations complémentaires** :
+- combiné à D3 (SSRF), ce secret peut aussi être lu directement dans le `success_url` d'une session Stripe d'un autre client (cf. finding D3), rendant le bruteforce ci-dessus même superflu pour un attaquant qui aurait déjà exploité D3.
+- le secret est transmis **dans l'URL** de redirection (`success_url=...&checkout_confirmation_secret=...`, `back/services/stripe.py`), donc par construction journalisé par tout reverse-proxy/serveur web en amont (le format de log `combined` d'Apache inclut la ligne de requête complète), ce qui correspond à CWE-598 (Use of GET Request Method With Sensitive Query Strings). Quiconque a accès aux journaux d'accès peut rejouer ce secret sans même avoir à le bruteforcer.
 
 ---
 
@@ -258,7 +260,7 @@ curl -s https://hackbnb.dashbox.cloud/api/rooms/1 | python3 -m json.tool
 
 `HTTP/2 200 OK`, aucun cookie ni jeton envoyé : le champ `host.email` est renvoyé en clair. `GET /api/rooms/` renvoie le même objet pour les **10** chambres de la pré-production (toutes rattachées à l'hôte `john@doe.com`).
 
-**Impact** : l'adresse e-mail est une donnée personnelle au sens du RGPD. Les hôtes de HackBNB ont des « profils sensibles du monde cyber » (cf. entretien, annexe 3). La fuite permet de collecter les e-mails de tous les hôtes en une requête, puis de les cibler (phishing, corrélation d'identités). Les conséquences restent isolées à cette donnée.
+**Impact** : l'adresse e-mail est une donnée personnelle au sens du RGPD. HackBNB décrit elle-même ses utilisateurs comme ayant « des profils sensibles du monde cyber » (annexe 1, e-mail initial d'Élodie Marchand), un constat corroboré par l'entretien avec le responsable technique (annexe 3). La fuite permet de collecter les e-mails de tous les hôtes en une requête, puis de les cibler (phishing, corrélation d'identités). Les conséquences restent isolées à cette donnée.
 
 **Niveau de risque (échelle ANSSI)** : Exploitation **Facile** × Impact **Important** = **Majeur** (conforme annexe 5, item D5).
 
@@ -276,23 +278,31 @@ L'e-mail ne doit être renvoyé que par une route authentifiée (`/users/me`), �
 
 ---
 
-## D6 : Clé API Stripe présente dans d'anciens commits
+## D6 : Clé API Stripe exposée dans le dépôt Git (code actuel et historique)
 
+| Champ | Valeur |
+|---|---|
+| **CWE** | CWE-798 (Use of Hard-coded Credentials), CWE-540 (Inclusion of Sensitive Information in Source Code) |
+| **OWASP Top 10** | A07:2021 – Identification and Authentication Failures |
+| **Localisation** | `docker-compose.yml`, ligne 10 (commit `4aec6cd79…`, toujours en HEAD) + `back/services/stripe.py` (commit `ef5503c`, retiré au commit `9eeb41e`) |
+
+**Code vulnérable**
+```yaml
+# docker-compose.yml, ligne 10 — commit 4aec6cd799457718ab012c186fb29bb6fc3adc43, toujours présent en HEAD
+environment:
+  APP_ORIGIN_HOST: http://localhost:9000
+  STRIPE_API_KEY: sk_test_51RhVfI2aoAWLbEQqUskEoID6RpBTEXO3hFAmubERuAbcYeWZ18m1yTRS9L3m9akdKowxs8lteAbxfIFwhrRiIkho00IWLuBOs3
+```
 ```python
-# rooms_models.py
-if self.host_user:
-    output["host"] = self.host_user.to_public_dict()
+# back/services/stripe.py — commit ef5503c, retiré au commit 9eeb41e
+stripe.api_key = "rk_test_51RhVfI2aoAWLbEQqd67veWGXyEfUURYFN5oILPW0kVLEMbAHX7jg7581yVSeggp04xRaDFE68JmDZVIDZCNSWE0X008r1rAkXU"
 ```
 
-## D6 : Historique Git - Gitleaks
+**Mécanisme** : un scan Gitleaks de l'historique complet du dépôt remonte 113 alertes (majoritairement des doublons du même secret répété sur plusieurs commits). Après triage, deux clés Stripe distinctes et réellement exploitables sont confirmées :
+1. Une clé secrète (`sk_test_…`, droits complets sur le compte marchand) en dur dans `docker-compose.yml`, introduite au commit `4aec6cd799457718ab012c186fb29bb6fc3adc43` (Emma Roussel, 2025-03-19) : **toujours présente dans le code actuel (HEAD)**, lisible sans avoir besoin de consulter l'historique Git.
+2. Une clé restreinte (`rk_test_…`) en dur dans `back/services/stripe.py`, introduite au commit `ef5503c` puis remplacée par `os.getenv('STRIPE_API_KEY')` au commit `9eeb41e` : retirée du code courant mais toujours lisible dans l'historique.
 
-Après avoir exécute l’outil Gitleaks sur le repos on trouve 113 alertes qui ramène trois fuites distinctes:
-
-### Fuite 1: Stripe access token
-
-Gravité ⇒ critique
-
-Fichier docker-compose.yml, introduit au commit 4aec6cd79… et toujours présente dans la version actuelle du dépôt.
+### Preuve 1 : Clé Stripe en dur dans `docker-compose.yml` (toujours en HEAD)
 
 ```json
 {
@@ -300,110 +310,42 @@ Fichier docker-compose.yml, introduit au commit 4aec6cd79… et toujours présen
   "Description": "Found a Stripe Access Token, posing a risk to payment processing services and sensitive financial data.",
   "StartLine": 10,
   "EndLine": 10,
-  "StartColumn": 24,
-  "EndColumn": 130,
   "Match": "sk_test_51RhVfI2aoAWLbEQqUskEoID6RpBTEXO3hFAmubERuAbcYeWZ18m1yTRS9L3m9akdKowxs8lteAbxfIFwhrRiIkho00IWLuBOs3",
-  "Secret": "sk_test_51RhVfI2aoAWLbEQqUskEoID6RpBTEXO3hFAmubERuAbcYeWZ18m1yTRS9L3m9akdKowxs8lteAbxfIFwhrRiIkho00IWLuBOs3",
   "File": "docker-compose.yml",
-  "SymlinkFile": "",
   "Commit": "4aec6cd799457718ab012c186fb29bb6fc3adc43",
-  "Link": "https://github.com/Arnaud-Dec/project-hackbnb-sources/blob/4aec6cd799457718ab012c186fb29bb6fc3adc43/docker-compose.yml#L10",
   "Entropy": 5.3875604,
   "Author": "Emma Roussel",
   "Email": "emma.roussel@hackbnb.dev",
   "Date": "2025-03-19T15:30:25Z",
   "Message": "chore: implement Docker Compose deployment setup",
-  "Tags": [],
   "Fingerprint": "4aec6cd799457718ab012c186fb29bb6fc3adc43:docker-compose.yml:stripe-access-token:10"
- }
+}
 ```
 
-#### Le problème
+`git show HEAD:docker-compose.yml` confirme que la clé est encore présente dans la version actuelle du dépôt : aucune recherche dans l'historique n'est nécessaire pour la récupérer.
 
-La clé secrète Stripe es écrite en dur dans le fichier de déploiement versionné dans git
-
-```json
-environment:
-      APP_ORIGIN_HOST: http://localhost:9000
-      STRIPE_API_KEY: sk_test_51RhVfI2a...
-```
-
-Une clé secrète qui donne accès complet à l’API Stripe du compte.
-
-#### Exploitation
-
-1. L’attaquant clone le dépôt.
-2. Il extrait la valeur de STRIP_API_KEY.
-3. Il appelle directement l’API Stripe avec cette clé et il peut lister les transactions, créer ou rembourser des paiements.
-
-#### Solution
-
-1. Révoquer la clé dans le dashboard Stripe, car le retirer du code ne suffit pas tant qu’elle reste valide.
-2. Sortir la clé du dépôt: la passer par un fichier .env non versionné
-3. Nettoyer l’historique Git
-
-### Fuite 2: Clé Stripe dans l’historique Git
-
-Gravité ⇒ Elévée
-
-Fichier **back/services/stripe.py**, clé **rk_test_51Rh**... ajoutée au commit **ef5503c**. Déjà retirée du code actuel, mais encore lisible dans l'historique.
-
-#### Le problème
-
-La clé a d'abord été écrite en dur dans le service Stripe, puis le commit `9eeb41e` l'a remplacée par un appel à l'environnement :
-
-```python
-stripe.api_key = os.getenv('STRIPE_API_KEY')
-```
-
-Même s’il est corrigé n’est pas effacé du Git.
-
-#### Exploitation
-
-Même si la variable sécrète est plus dans le code, il suffit de parcourir l’historique.
+### Preuve 2 : Clé Stripe retirée du code mais toujours lisible dans l'historique
 
 ```bash
 git show ef5503c:back/services/stripe.py
 ```
-
-#### Solution
-
-1. Révoquer la clé rk_test dans le dashboard Stripe, car elle restera valide tant qu’elle est pas révoquée, peu import le code.
-2. Nettoyer l’historique pour effacer la clé des anciens commits 
-
-### Fuite 3: **Secrets de confirmation de paiement exposés et prévisibles**
-
-Gravité ⇒ élevée
-
-#### Le problème
-
-1. **Le secret voyage dans l’URL :** Après paiement, Stripe redirige vers une URL qui contient le secret (`back/services/stripe.py:15`): 
-
-```bash
-success_url=f"{origin_host}/booking/{reference}?checkout_confirmation_secret={confirmation_secret}"
+```python
+stripe.api_key = "rk_test_51RhVfI2aoAWLbEQqd67veWGXyEfUURYFN5oILPW0kVLEMbAHX7jg7581yVSeggp04xRaDFE68JmDZVIDZCNSWE0X008r1rAkXU"
 ```
 
-Du coup on peut la trouver dans les logs Aoache.
+Le commit `9eeb41e` ("fix: do not hardcode the Stripe API key") retire la clé du code courant, mais ne la supprime pas de l'historique Git : tout clone du dépôt permet de la relire intégralement.
 
- b. **Le secret est prévisible :** Dans `back/api/bookings/bookings_api.py:94-95`, il est généré à partir de l'heure courante en secondes :
+**Impact** : une clé Stripe valide permet d'interroger directement l'API du compte marchand (consultation des transactions, et selon les droits associés à la clé, création ou remboursement de paiements) sans passer par l'application HackBNB.
 
-```bash
-random_string = str(int(time.time()))   
-checkout_confirmation_secret = hashlib.sha512(random_string.encode('utf-8')).hexdigest()
-```
+**Niveau de risque (échelle ANSSI)** : Exploitation **Difficile** × Impact **Critique** = **Majeur** (conforme annexe 5, item D6, évaluation portant sur la fuite historique).
 
-#### Exploitation
+**Observation complémentaire (divergence avec le rapport de pentest)** : l'annexe 5 évalue D6 en Exploitation **Difficile**, ce qui suppose une recherche dans l'historique Git. La Preuve 1 montre que la clé `sk_test_…` est en réalité lisible **directement dans le fichier `docker-compose.yml` courant**, sans archéologie Git : pour cette fuite précise, l'exploitation réelle est **Facile**, ce qui porterait le risque résultant à **Critique** (Facile × Critique) plutôt que Majeur. La vulnérabilité s'est donc aggravée depuis l'audit de juin 2026 : la clé n'a toujours pas été tournée ni retirée du code en production.
 
-Voie 1 : Via les logs du fichier apache.log récupère la référence et le secret , puis il pourra confirmer la réservation sans payer.
-
-Voie 2: Comme le secret ne dépend que de l'heure de création, un attaquant qui crée une réservation connaît l'instant approximatif, et n'a qu'à tester quelques centaines de timestamps autour
-
-#### Solution
-
-1. Créer un vrai secret aleatoire pas juste dérivé du temps
-2. Ne pas confirmer le paiement avec un secret dans l’URL
-3. Confirmer coté serveur via un webhook vers Stripe.
-4. Ne pas logger les secrets
+**Recommandation** :
+1. Révoquer immédiatement les deux clés dans le dashboard Stripe : les retirer du code ne suffit pas tant qu'elles restent valides côté Stripe.
+2. Ne jamais committer de secret : externaliser via un fichier `.env` non versionné (`.gitignore`) ou un gestionnaire de secrets dédié (Vault, AWS/GCP Secrets Manager).
+3. Nettoyer l'historique Git après rotation des clés (`git filter-repo`, BFG Repo-Cleaner).
+4. Intégrer un scanner de secrets (Gitleaks, TruffleHog) en pre-commit et en CI pour bloquer toute nouvelle fuite avant fusion.
 
 
 ---
