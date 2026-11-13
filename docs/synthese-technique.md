@@ -10,55 +10,62 @@ Trace écrite des vulnérabilités identifiées dans le rapport de pentest (anne
 
 ## Investigation Forensic des logs Apache (Grafana & Loki)
 
-L'analyse des logs du serveur Apache du 7 novembre 2026 révèle 13 925 requêtes au total. Une adresse IP unique, `149.102.235.40`, génère 6 783 requêtes (48,7 % du trafic journalier) concentrées entre 10:52:23 et 11:34:54 (heure serveur, CET/UTC+1).
+L'analyse des logs Apache du 7 novembre 2026 recense 13 925 requêtes. L'IP `149.102.235.40` génère à elle seule 6 783 requêtes (48,7 % du total) entre 10:52:23 et 11:34:54.
 
-### Profil de l'attaquant
+### Contexte
 
-- **Adresse IP source :** `149.102.235.40`
-- **User-Agents relevés :**
-  - `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0` (navigation manuelle sous macOS)
-  - `dirsearch/v0.4.2` (fuzzing d'arborescence automatisé)
-  - `python-requests/2.25.0` (script automatisé d'exfiltration des données de paiement)
-- **Pseudonyme / Contact :** `hackb3ck` (adresse `contact@hackb3ck.me` lors du mail envoyé le 7 novembre à 23:51) et `Hackb3ck6000` (post de vente sur le forum darkweb le 9 novembre à 06:37).
+- **Dates :**
+  - **7 novembre 2026 (10:52 – 11:34) :** Attaque et exfiltration.
+  - **7 novembre 2026 (23:51) :** E-mail de contact sous le pseudo `hackb3ck`.
+  - **9 novembre 2026 (06:37) :** Vente des données sur le dark web par `Hackb3ck6000`.
+  - **9 au 13 novembre 2026 :** Analyse forensic et reproduction des failles.
+  - **23 novembre 2026 :** Soutenance finale.
+- **Plateformes :**
+  - Production : `https://hackbnb.fr` (serveur attaqué).
+  - Pré-production : `https://hackbnb.dashbox.cloud` (reproduction des vulnérabilités).
 
-### Chronologie et volumétrie de l'attaque
+### Déroulé de l'attaque
 
 ![Afflux massif de requêtes lors de l'attaque dans Grafana](img/grafana_logs_surge.png)
-*Vue Grafana Logs Drilldown : pic de plus de 6 000 requêtes entre 09:52 et 10:02 UTC (= 10:52-11:02 heure serveur), correspondant au fuzzing `dirsearch` de la phase de scan automatisé ci-dessous.*
+*Vue Grafana Logs Drilldown : pic de plus de 6 300 requêtes entre 09:52 et 10:02 UTC le 7 novembre 2026.*
 
 ![Détail des requêtes d'exploitation SQLi et SSRF](img/grafana_sqli_ssrf.png)
-*Vue Grafana Loki : requête UNION SELECT pour extraire le secret de réservation, suivie des appels SSRF vers `/customers` et les moyens de paiement des clients.*
+*Vue Grafana Loki : Requête UNION SELECT et appels SSRF vers Stripe.*
 
-```mermaid
-gantt
-    title Chronologie de l'attaque du 7 novembre 2026 (heure serveur, CET/UTC+1)
-    dateFormat HH:mm:ss
-    axisFormat %H:%M
-    todayMarker off
+- **1ère requête (10:52:23) :** `GET / HTTP/1.1` (code 200). Navigation manuelle (Firefox 52, macOS) depuis l'IP `149.102.235.40` (VPN Datacamp / Prague). Repérage du site et de l'API.
+- **1er outil de scan (10:53:23 – 11:11:16) :** `dirsearch/v0.4.2`.
+  - *Pourquoi ?* Cartographier le site et chercher des fichiers sensibles (`/.git/HEAD`, `/admin/`, etc.). Plus de 6 000 requêtes en 18 minutes.
+- **Injection SQL (11:11:37 puis 11:16:44) :**
+  - *Quelle requête ?* Après un test logique (`category=hut' OR 1=1 --`), l'attaquant utilise cette requête ciblée sur sa réservation `85A1NBEJ` (détaillée en D1/D4) :
+    ```text
+    GET /api/rooms/?category=test' UNION SELECT bookings.id, bookings.reference, bookings.checkout_confirmation_secret, bookings.stripe_checkout_session_id, 0, 0, 0, 0 FROM bookings WHERE bookings.reference = '85A1NBEJ' --
+    ```
+    Elle permet de récupérer le secret de confirmation pour valider la réservation sans payer.
+- **4 fichiers du serveur lus via Path Traversal (11:18:56 – 11:19:10) :**
+  - *Comment ?* Via le paramètre vulnérable `name` sur `/api/uploads/?name=...` (détaillé en D2).
+  - Les 4 fichiers extraits (code 200) :
+    1. `../app.py` (structure de l'application Flask et mode debug).
+    2. `../api/bookings/bookings_api.py` (logique des réservations et route `checkout-lines`).
+    3. `../services/stripe.py` (construction non sécurisée des requêtes Stripe).
+    4. `../../etc/passwd` (utilisateurs système du conteneur).
+- **2nd outil utilisé (11:21:40 – 11:23:54) :** `python-requests/2.25.0`.
+  - *Pourquoi ?* Automatiser l'exfiltration via la SSRF Stripe (détaillée en D3). L'attaquant récupère la liste des clients à 11:19:43 (`../../customers#`), puis boucle sur les 624 profils pour aspirer leurs cartes bancaires (`../../customers/cus_.../payment_methods#`).
+- **Dernière requête (11:34:54) :** `GET / HTTP/1.1` (code 200). Dernière vérification avant déconnexion. Durée totale : 42 min 31 s.
+- **Post-attaque :**
+  - E-mail (07/11 à 23:51) : `contact@hackb3ck.me` réclame une récompense en se prétendant chercheur en sécurité.
+  - Dark web (09/11 à 06:37) : Mise en vente de la base sur un forum russophone par `Hackb3ck6000`.
 
-    section Reconnaissance
-    10h52m23 - Navigation /api/rooms/ et tests de payloads booléens :a1, 10:52:23, 1m
+### Données exfiltrées
 
-    section Scan automatisé
-    10h53m23 - Fuzzing dirsearch sur des milliers de chemins sensibles :a2, 10:53:23, 18m
+- **Données bancaires et clients :** 624 clients Stripe (noms, identifiants `cus_*`, types de cartes, 4 derniers chiffres et dates d'expiration).
+- **Données internes :** Secrets de confirmation et identifiants de sessions Stripe.
+- **Fichiers serveur :** Code backend (`app.py`, `bookings_api.py`, `stripe.py`) et `/etc/passwd`.
+- **Données personnelles :** E-mails des hôtes et des utilisateurs.
 
-    section D1 - Injection SQL
-    11h11m37 - Injection confirmée (category=hut' OR 1=1--) → HTTP 200 :milestone, m1, 11:11:37, 0m
+### Recommandations
 
-    section D4 - Secret de confirmation
-    11h13m37 - Réservation test 85A1NBEJ, confirmation sans secret → 422 :a3, 11:13:37, 1m
-    11h16m44 - Extraction du secret via l'injection SQL D1 :milestone, m2, 11:16:44, 0m
-    11h16m54 - Validation frauduleuse → 200, sans paiement Stripe :milestone, m3, 11:16:54, 0m
-
-    section D2 - Path traversal
-    11h18m49 - Sondage /api/uploads/?name=../... :a4, 11:18:49, 1m
-
-    section D3 - SSRF
-    11h19m43 - Liste clients (19,1 Mo) puis moyens de paiement :a5, 11:19:43, 5m
-```
-*Rendu en diagramme Gantt/chronologie (Mermaid) sur GitHub et dans l'aperçu Markdown de VS Code. Horodatages exacts à la seconde près (notation h/m/s pour rester lisibles dans le diagramme).*
-
-**Observation** : pour obtenir le secret de confirmation, l'attaquant réel n'a utilisé ni le bruteforce décrit dans la méthodologie D4, ni la fuite via `success_url` documentée dans le chaînage D3 → D4 : il l'a lu directement en base via l'injection SQL D1 (11h16m44), le chemin le plus court des trois. Les trois voies restent valides et doivent être corrigées indépendamment.
+1. **Mots de passe :** Remplacer le hachage MD5 non salé par Argon2id ou bcrypt.
+2. **Vulnérabilités D1 à D8 :** Appliquer les correctifs détaillés dans les sections suivantes (requêtes préparées, validation des fichiers, SDK Stripe officiel, en-têtes de sécurité, suppression des secrets versionnés).
 
 ---
 
