@@ -2,9 +2,43 @@
 
 **Date d'investigation :** 9, 11 et 13 novembre 2026
 **Environnement testé :** pré-production (`https://hackbnb.dashbox.cloud`)
-**Outils utilisés :** Burp Suite Community Edition (Repeater, Intruder), curl, Gitleaks, git
+**Outils utilisés :** Burp Suite Community Edition (Repeater, Intruder), curl, Gitleaks, git, Grafana / Loki
 
 Trace écrite des vulnérabilités identifiées dans le rapport de pentest (annexe 5) : D1-D5, D7 et D8 sont reproduites et prouvées directement sur l'environnement de pré-production ; D6 est établie par audit du dépôt Git (historique et code actuel).
+
+---
+
+## Investigation Forensic des logs Apache (Grafana & Loki)
+
+L'analyse des logs du serveur Apache du 7 novembre 2026 révèle 13 925 requêtes au total. Une adresse IP unique, `149.102.235.40`, génère 6 783 requêtes (48,7 % du trafic journalier) concentrées entre 10:52:23 et 11:34:54.
+
+### Profil de l'attaquant
+
+- **Adresse IP source :** `149.102.235.40`
+- **User-Agents relevés :**
+  - `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0` (navigation manuelle sous macOS)
+  - `dirsearch/v0.4.2` (fuzzing d'arborescence automatisé)
+  - `python-requests/2.25.0` (script automatisé d'exfiltration des données de paiement)
+- **Pseudonyme / Contact :** `hackb3ck` (adresse `contact@hackb3ck.me` lors du mail envoyé le 7 novembre à 23:51) et `Hackb3ck6000` (post de vente sur le forum darkweb le 9 novembre à 06:37).
+
+### Chronologie et volumétrie de l'attaque
+
+Le graphique de volumétrie extrait de Grafana Logs Drilldown montre l'afflux massif de requêtes généré lors de l'attaque :
+
+![Afflux massif de requêtes lors de l'attaque dans Grafana](img/grafana_logs_surge.png)
+*Vue Grafana Logs Drilldown : pic de plus de 6 000 requêtes concentrées entre 09:52 et 10:02 (UTC) le 7 novembre 2026.*
+
+![Détail des requêtes d'exploitation SQLi et SSRF](img/grafana_sqli_ssrf.png)
+*Vue Grafana Loki : Requête UNION SELECT pour extraire le secret de réservation suivie des appels SSRF vers /customers et les moyens de paiement des clients.*
+
+1. **10:52:23 - 10:53:21 : Reconnaissance initiale.** Navigation sur `/api/rooms/`, consultation de logements réels, puis tests d'arguments anormaux (`/api/rooms/0`, `-1`, `toto`) et de payloads booléens (`%27%20OR%201=1%20--`).
+2. **10:53:23 - 11:11:16 : Scan automatisé.** Fuzzing massif avec `dirsearch/v0.4.2` sur plusieurs milliers de chemins sensibles (`/.git/HEAD`, `/admin/`, `/backup.sql`, etc.), générant des codes HTTP 404.
+3. **11:11:37 : Validation de l'injection SQL (D1).** Requête concluante sur `/api/rooms/?category=hut%27%20OR%201=1%20--` (HTTP 200).
+4. **11:13:37 - 11:13:57 : Création d'une réservation test.** Génération de la réservation `85A1NBEJ` suivie d'une tentative infructueuse de validation sans secret (HTTP 422).
+5. **11:16:44 : Extraction du secret de réservation via SQLi (D1/D4).** Requête `UNION SELECT` extrayant le `checkout_confirmation_secret` de la réservation `85A1NBEJ`.
+6. **11:16:54 : Validation frauduleuse de réservation (D4).** Envoi du secret sur `/api/bookings/85A1NBEJ/confirm-checkout` (HTTP 200). La réservation est validée sans transaction Stripe.
+7. **11:18:49 - 11:19:15 : Tentative de Path Traversal (D2).** Sondage de `/api/uploads/?name=...` avec des noms de fichiers et séquences `../`.
+8. **11:19:43 - 11:23:54 : Exfiltration de données via SSRF sur Stripe (D3).** L'attaquant envoie d'abord `checkout_session_id=../../customers%23` pour extraire la liste complète des identifiants clients (réponse de 19,1 Mo), puis lance un script Python pour aspirer les cartes et moyens de paiement de chaque client (`../../customers/cus_.../payment_methods%23`).
 
 ---
 
