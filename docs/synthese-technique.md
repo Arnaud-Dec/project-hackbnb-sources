@@ -278,6 +278,132 @@ L'e-mail ne doit être renvoyé que par une route authentifiée (`/users/me`), �
 
 ## D6 : Clé API Stripe présente dans d'anciens commits
 
+```python
+# rooms_models.py
+if self.host_user:
+    output["host"] = self.host_user.to_public_dict()
+```
+
+## D6 : Historique Git - Gitleaks
+
+Après avoir exécute l’outil Gitleaks sur le repos on trouve 113 alertes qui ramène trois fuites distinctes:
+
+### Fuite 1: Stripe access token
+
+Gravité ⇒ critique
+
+Fichier docker-compose.yml, introduit au commit 4aec6cd79… et toujours présente dans la version actuelle du dépôt.
+
+```json
+{
+  "RuleID": "stripe-access-token",
+  "Description": "Found a Stripe Access Token, posing a risk to payment processing services and sensitive financial data.",
+  "StartLine": 10,
+  "EndLine": 10,
+  "StartColumn": 24,
+  "EndColumn": 130,
+  "Match": "sk_test_51RhVfI2aoAWLbEQqUskEoID6RpBTEXO3hFAmubERuAbcYeWZ18m1yTRS9L3m9akdKowxs8lteAbxfIFwhrRiIkho00IWLuBOs3",
+  "Secret": "sk_test_51RhVfI2aoAWLbEQqUskEoID6RpBTEXO3hFAmubERuAbcYeWZ18m1yTRS9L3m9akdKowxs8lteAbxfIFwhrRiIkho00IWLuBOs3",
+  "File": "docker-compose.yml",
+  "SymlinkFile": "",
+  "Commit": "4aec6cd799457718ab012c186fb29bb6fc3adc43",
+  "Link": "https://github.com/Arnaud-Dec/project-hackbnb-sources/blob/4aec6cd799457718ab012c186fb29bb6fc3adc43/docker-compose.yml#L10",
+  "Entropy": 5.3875604,
+  "Author": "Emma Roussel",
+  "Email": "emma.roussel@hackbnb.dev",
+  "Date": "2025-03-19T15:30:25Z",
+  "Message": "chore: implement Docker Compose deployment setup",
+  "Tags": [],
+  "Fingerprint": "4aec6cd799457718ab012c186fb29bb6fc3adc43:docker-compose.yml:stripe-access-token:10"
+ }
+```
+
+#### Le problème
+
+La clé secrète Stripe es écrite en dur dans le fichier de déploiement versionné dans git
+
+```json
+environment:
+      APP_ORIGIN_HOST: http://localhost:9000
+      STRIPE_API_KEY: sk_test_51RhVfI2a...
+```
+
+Une clé secrète qui donne accès complet à l’API Stripe du compte.
+
+#### Exploitation
+
+1. L’attaquant clone le dépôt.
+2. Il extrait la valeur de STRIP_API_KEY.
+3. Il appelle directement l’API Stripe avec cette clé et il peut lister les transactions, créer ou rembourser des paiements.
+
+#### Solution
+
+1. Révoquer la clé dans le dashboard Stripe, car le retirer du code ne suffit pas tant qu’elle reste valide.
+2. Sortir la clé du dépôt: la passer par un fichier .env non versionné
+3. Nettoyer l’historique Git
+
+### Fuite 2: Clé Stripe dans l’historique Git
+
+Gravité ⇒ Elévée
+
+Fichier **back/services/stripe.py**, clé **rk_test_51Rh**... ajoutée au commit **ef5503c**. Déjà retirée du code actuel, mais encore lisible dans l'historique.
+
+#### Le problème
+
+La clé a d'abord été écrite en dur dans le service Stripe, puis le commit `9eeb41e` l'a remplacée par un appel à l'environnement :
+
+```python
+stripe.api_key = os.getenv('STRIPE_API_KEY')
+```
+
+Même s’il est corrigé n’est pas effacé du Git.
+
+#### Exploitation
+
+Même si la variable sécrète est plus dans le code, il suffit de parcourir l’historique.
+
+```bash
+git show ef5503c:back/services/stripe.py
+```
+
+#### Solution
+
+1. Révoquer la clé rk_test dans le dashboard Stripe, car elle restera valide tant qu’elle est pas révoquée, peu import le code.
+2. Nettoyer l’historique pour effacer la clé des anciens commits 
+
+### Fuite 3: **Secrets de confirmation de paiement exposés et prévisibles**
+
+Gravité ⇒ élevée
+
+#### Le problème
+
+1. **Le secret voyage dans l’URL :** Après paiement, Stripe redirige vers une URL qui contient le secret (`back/services/stripe.py:15`): 
+
+```bash
+success_url=f"{origin_host}/booking/{reference}?checkout_confirmation_secret={confirmation_secret}"
+```
+
+Du coup on peut la trouver dans les logs Aoache.
+
+ b. **Le secret est prévisible :** Dans `back/api/bookings/bookings_api.py:94-95`, il est généré à partir de l'heure courante en secondes :
+
+```bash
+random_string = str(int(time.time()))   
+checkout_confirmation_secret = hashlib.sha512(random_string.encode('utf-8')).hexdigest()
+```
+
+#### Exploitation
+
+Voie 1 : Via les logs du fichier apache.log récupère la référence et le secret , puis il pourra confirmer la réservation sans payer.
+
+Voie 2: Comme le secret ne dépend que de l'heure de création, un attaquant qui crée une réservation connaît l'instant approximatif, et n'a qu'à tester quelques centaines de timestamps autour
+
+#### Solution
+
+1. Créer un vrai secret aleatoire pas juste dérivé du temps
+2. Ne pas confirmer le paiement avec un secret dans l’URL
+3. Confirmer coté serveur via un webhook vers Stripe.
+4. Ne pas logger les secrets
 
 
 ---
