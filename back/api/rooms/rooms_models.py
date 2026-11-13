@@ -32,6 +32,7 @@ class Room(db.Model):
         }
 
         if self.host_user:
-            output["host"] = self.host_user.to_dict()
+            # D5
+            output["host"] = self.host_user.to_public_dict()
 
         return output
