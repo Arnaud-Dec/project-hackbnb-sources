@@ -1,2 +1,3 @@
 apache2ctl -D FOREGROUND &
-python3 app.py
+# D8
+gunicorn -w 4 -b 127.0.0.1:9001 app:app

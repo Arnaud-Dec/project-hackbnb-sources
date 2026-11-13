@@ -1,5 +1,4 @@
 from flask import jsonify, Blueprint, request, send_from_directory
-from sqlalchemy import text
 from sqlalchemy.orm import joinedload
 from .rooms_models import Room
 from database.init import db
@@ -15,7 +14,8 @@ def list_rooms():
 
    if "category" in request.args:
       category = request.args["category"]
-      rooms = Room.query.filter(text(f"category = '{category}'")).all()
+      # D1
+      rooms = Room.query.filter_by(category=category).all()
    else:
       rooms = Room.query.all()
 
