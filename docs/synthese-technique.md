@@ -403,7 +403,7 @@ GET /api/bookings/XFX6Q5I2 HTTP/2
 **Recommandation** : générer le secret avec une source d'aléa cryptographiquement sûre (`secrets.token_hex(32)` en Python), indépendante de toute information prévisible comme un timestamp.
 
 **Observations complémentaires** :
-- combiné à D3 (SSRF), ce secret peut aussi être lu directement dans le `success_url` d'une session Stripe d'un autre client (cf. finding D3), rendant le bruteforce ci-dessus même superflu pour un attaquant qui aurait déjà exploité D3.
+- combiné à D3 (SSRF), ce secret peut aussi être lu directement dans le `success_url` d'une session Stripe d'un autre client (cf. l'observation sur le chaînage D3 → D4), rendant le bruteforce ci-dessus même superflu pour un attaquant qui aurait déjà exploité D3.
 - le secret est transmis **dans l'URL** de redirection (`success_url=...&checkout_confirmation_secret=...`, `back/services/stripe.py`), donc par construction journalisé par tout reverse-proxy/serveur web en amont (le format de log `combined` d'Apache inclut la ligne de requête complète), ce qui correspond à CWE-598 (Use of GET Request Method With Sensitive Query Strings). Quiconque a accès aux journaux d'accès peut rejouer ce secret sans même avoir à le bruteforcer.
 
 **Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : Le bruteforce Intruder (SHA-512 des timestamps autour de la création) doit renvoyer uniquement des `422`. Le secret généré doit faire 64 caractères hexadécimaux aléatoires, sans lien avec l'heure.
