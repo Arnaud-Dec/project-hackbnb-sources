@@ -10,7 +10,7 @@ Trace écrite des vulnérabilités identifiées dans le rapport de pentest (anne
 
 ## Investigation Forensic des logs Apache (Grafana & Loki)
 
-L'analyse des logs du serveur Apache du 7 novembre 2026 révèle 13 925 requêtes au total. Une adresse IP unique, `149.102.235.40`, génère 6 783 requêtes (48,7 % du trafic journalier) concentrées entre 10:52:23 et 11:34:54.
+L'analyse des logs du serveur Apache du 7 novembre 2026 révèle 13 925 requêtes au total. Une adresse IP unique, `149.102.235.40`, génère 6 783 requêtes (48,7 % du trafic journalier) concentrées entre 10:52:23 et 11:34:54 (heure serveur, CET/UTC+1).
 
 ### Profil de l'attaquant
 
@@ -23,22 +23,42 @@ L'analyse des logs du serveur Apache du 7 novembre 2026 révèle 13 925 requête
 
 ### Chronologie et volumétrie de l'attaque
 
-Le graphique de volumétrie extrait de Grafana Logs Drilldown montre l'afflux massif de requêtes généré lors de l'attaque :
-
 ![Afflux massif de requêtes lors de l'attaque dans Grafana](img/grafana_logs_surge.png)
-*Vue Grafana Logs Drilldown : pic de plus de 6 000 requêtes concentrées entre 09:52 et 10:02 (UTC) le 7 novembre 2026.*
+*Vue Grafana Logs Drilldown : pic de plus de 6 000 requêtes entre 09:52 et 10:02 UTC (= 10:52-11:02 heure serveur), correspondant au fuzzing `dirsearch` de la phase de scan automatisé ci-dessous.*
 
 ![Détail des requêtes d'exploitation SQLi et SSRF](img/grafana_sqli_ssrf.png)
-*Vue Grafana Loki : Requête UNION SELECT pour extraire le secret de réservation suivie des appels SSRF vers /customers et les moyens de paiement des clients.*
+*Vue Grafana Loki : requête UNION SELECT pour extraire le secret de réservation, suivie des appels SSRF vers `/customers` et les moyens de paiement des clients.*
 
-1. **10:52:23 - 10:53:21 : Reconnaissance initiale.** Navigation sur `/api/rooms/`, consultation de logements réels, puis tests d'arguments anormaux (`/api/rooms/0`, `-1`, `toto`) et de payloads booléens (`%27%20OR%201=1%20--`).
-2. **10:53:23 - 11:11:16 : Scan automatisé.** Fuzzing massif avec `dirsearch/v0.4.2` sur plusieurs milliers de chemins sensibles (`/.git/HEAD`, `/admin/`, `/backup.sql`, etc.), générant des codes HTTP 404.
-3. **11:11:37 : Validation de l'injection SQL (D1).** Requête concluante sur `/api/rooms/?category=hut%27%20OR%201=1%20--` (HTTP 200).
-4. **11:13:37 - 11:13:57 : Création d'une réservation test.** Génération de la réservation `85A1NBEJ` suivie d'une tentative infructueuse de validation sans secret (HTTP 422).
-5. **11:16:44 : Extraction du secret de réservation via SQLi (D1/D4).** Requête `UNION SELECT` extrayant le `checkout_confirmation_secret` de la réservation `85A1NBEJ`.
-6. **11:16:54 : Validation frauduleuse de réservation (D4).** Envoi du secret sur `/api/bookings/85A1NBEJ/confirm-checkout` (HTTP 200). La réservation est validée sans transaction Stripe.
-7. **11:18:49 - 11:19:15 : Tentative de Path Traversal (D2).** Sondage de `/api/uploads/?name=...` avec des noms de fichiers et séquences `../`.
-8. **11:19:43 - 11:23:54 : Exfiltration de données via SSRF sur Stripe (D3).** L'attaquant envoie d'abord `checkout_session_id=../../customers%23` pour extraire la liste complète des identifiants clients (réponse de 19,1 Mo), puis lance un script Python pour aspirer les cartes et moyens de paiement de chaque client (`../../customers/cus_.../payment_methods%23`).
+```mermaid
+gantt
+    title Chronologie de l'attaque du 7 novembre 2026 (heure serveur, CET/UTC+1)
+    dateFormat HH:mm:ss
+    axisFormat %H:%M
+    todayMarker off
+
+    section Reconnaissance
+    10h52m23 - Navigation /api/rooms/ et tests de payloads booléens :a1, 10:52:23, 1m
+
+    section Scan automatisé
+    10h53m23 - Fuzzing dirsearch sur des milliers de chemins sensibles :a2, 10:53:23, 18m
+
+    section D1 - Injection SQL
+    11h11m37 - Injection confirmée (category=hut' OR 1=1--) → HTTP 200 :milestone, m1, 11:11:37, 0m
+
+    section D4 - Secret de confirmation
+    11h13m37 - Réservation test 85A1NBEJ, confirmation sans secret → 422 :a3, 11:13:37, 1m
+    11h16m44 - Extraction du secret via l'injection SQL D1 :milestone, m2, 11:16:44, 0m
+    11h16m54 - Validation frauduleuse → 200, sans paiement Stripe :milestone, m3, 11:16:54, 0m
+
+    section D2 - Path traversal
+    11h18m49 - Sondage /api/uploads/?name=../... :a4, 11:18:49, 1m
+
+    section D3 - SSRF
+    11h19m43 - Liste clients (19,1 Mo) puis moyens de paiement :a5, 11:19:43, 5m
+```
+*Rendu en diagramme Gantt/chronologie (Mermaid) sur GitHub et dans l'aperçu Markdown de VS Code. Horodatages exacts à la seconde près (notation h/m/s pour rester lisibles dans le diagramme).*
+
+**Observation** : pour obtenir le secret de confirmation, l'attaquant réel n'a utilisé ni le bruteforce décrit dans la méthodologie D4, ni la fuite via `success_url` documentée dans le chaînage D3 → D4 : il l'a lu directement en base via l'injection SQL D1 (11h16m44), le chemin le plus court des trois. Les trois voies restent valides et doivent être corrigées indépendamment.
 
 ---
 
