@@ -29,6 +29,8 @@
 
 ## 1. Résumé exécutif
 
+**Pourquoi cette étude** : HackBNB a mandaté le CERT le 9 novembre 2026 après la découverte d'une revendication de compromission et d'une mise en vente de ses données sur le darkweb, publiée avant toute réponse de l'entreprise (chronologie complète en §5.2, objectifs détaillés en §2). Il fallait établir si l'intrusion était réelle et, si oui, en mesurer l'ampleur pour protéger les clients concernés et respecter les obligations réglementaires de l'entreprise.
+
 **La compromission de hackbnb.fr le 7 novembre 2026 est avérée.** Les journaux Apache montrent qu'une seule adresse IP (`149.102.235.40`) a exploité **cinq des huit vulnérabilités** du rapport de test d'intrusion de juin 2026 (D1, D2, D3, D4, D8), restées non corrigées. L'attaque a duré **42 minutes**, de 10:52 à 11:34. Il s'est écoulé **12 minutes** entre la première injection SQL réussie et la fin de l'exfiltration.
 
 L'attaquant, qui signe `hackb3ck` / `Hackb3ck6000`, a détourné le compte Stripe marchand de HackBNB à travers l'application. Il a ainsi extrait **la liste des clients Stripe et les moyens de paiement de 624 clients** (marque de carte, 4 derniers chiffres, date d'expiration), le code source du back-end et un fichier système. Il a aussi confirmé sa propre réservation sans la payer. Il a contacté HackBNB le soir même en se présentant comme chasseur de primes, puis a mis les données en vente sur un forum du darkweb le 9 novembre à 06:37, sans attendre de réponse.
