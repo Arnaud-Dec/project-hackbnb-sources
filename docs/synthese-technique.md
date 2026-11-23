@@ -60,8 +60,6 @@ Les huit vulnérabilités ont été localisées dans le code et sept ont été r
 | Code source | Dépôt GitHub du projet, historique complet (31 commits) |
 | Journaux | `apache.log` du 7 novembre 2026 (13 925 requêtes) |
 | Annexes | E-mails (annexes 1 et 2), entretien technique (annexe 3), post darkweb (annexe 4), rapport de pentest (annexe 5) |
-|
-
 
 ---
 

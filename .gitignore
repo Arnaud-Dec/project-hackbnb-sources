@@ -1,5 +1,6 @@
 .idea/
 .DS_Store
+docs/perso/
 
 # D6
 .env
