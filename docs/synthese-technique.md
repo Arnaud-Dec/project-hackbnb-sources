@@ -61,6 +61,8 @@ Les huit vulnérabilités ont été localisées dans le code et sept ont été r
 | Journaux | `apache.log` du 7 novembre 2026 (13 925 requêtes) |
 | Annexes | E-mails (annexes 1 et 2), entretien technique (annexe 3), post darkweb (annexe 4), rapport de pentest (annexe 5) |
 
+**Hypothèses** : l'équipe CERT (auteurs de ce rapport) intervient comme prestataire externe, distinct de l'équipe de développement interne de HackBNB (deux développeurs, cf. annexe 3). En temps normal, un CERT externe se limite à l'investigation, à la preuve de compromission (IoC) et aux recommandations de correction, sans écrire lui-même le code de production du client. Le mandat de cet exercice demande explicitement la fourniture d'un code-source corrigé par l'équipe d'investigation ; les correctifs présentés en section 6 sont donc rédigés à titre de proposition par le CERT, et restent soumis à relecture, validation et déploiement par l'équipe de développement de HackBNB — ce qui explique leur statut « non déployé » dans ce rapport.
+
 ---
 
 ## 3. Méthodologie
