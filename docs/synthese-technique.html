@@ -97,7 +97,6 @@ code {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  word-break: break-word;
 }
 .codeblock code { background: none; padding: 0; color: inherit; }
 .table-wrap {
@@ -129,17 +128,12 @@ img {
   margin: 0.6em auto;
 }
 em { color: var(--muted); }
-.table-wrap table :is(td, th):has(> em:only-child) { color: var(--muted); }
 
 @media print {
   body { padding: 0 8mm; font-size: 12.5px; max-width: none; }
   h2 { page-break-before: always; border-top: none; margin-top: 0; }
   h1 ~ h2:first-of-type { page-break-before: avoid; }
   a { color: var(--fg); }
-  /* Avoid breaking inside a single row/code block/image, but let big
-     multi-row tables (chronologie, logs) flow across pages row by row —
-     forcing the whole table to stay together just pushes the cut into
-     the middle of a row (often an image) once it's taller than a page. */
   tr, .codeblock, img { break-inside: avoid; }
   img { max-height: 240mm; }
   @page { margin: 16mm 14mm; }
@@ -448,6 +442,11 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 </tr>
 </tbody></table></div>
 
+<p>
+
+<strong>Hypothèses</strong> : l'équipe CERT (auteurs de ce rapport) intervient comme prestataire externe, distinct de l'équipe de développement interne de HackBNB (deux développeurs, cf. annexe 3). En temps normal, un CERT externe se limite à l'investigation, à la preuve de compromission (IoC) et aux recommandations de correction, sans écrire lui-même le code de production du client. Le mandat de cet exercice demande explicitement la fourniture d'un code-source corrigé par l'équipe d'investigation ; les correctifs présentés en section 6 sont donc rédigés à titre de proposition par le CERT, et restent soumis à relecture, validation et déploiement par l'équipe de développement de HackBNB — ce qui explique leur statut « non déployé » dans ce rapport.
+</p>
+
 <hr />
 
 <h2 id="3-méthodologie">3. Méthodologie</h2>
@@ -554,7 +553,7 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <td><strong>Critique</strong></td>
 <td>Oui</td>
 <td><strong>Oui</strong> (11:11, 11:16)</td>
-<td>À appliquer</td>
+<td>Corrigé, <strong>non déployé</strong></td>
 </tr>
 <tr>
 <td>D2</td>
@@ -564,7 +563,7 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <td><strong>Critique</strong></td>
 <td>Oui</td>
 <td><strong>Oui</strong> (11:18–11:19)</td>
-<td>À appliquer</td>
+<td>Corrigé, <strong>non déployé</strong></td>
 </tr>
 <tr>
 <td>D3</td>
@@ -574,7 +573,7 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <td><strong>Critique</strong></td>
 <td>Oui</td>
 <td><strong>Oui</strong> (11:19–11:23)</td>
-<td>À appliquer</td>
+<td>Corrigé, <strong>non déployé</strong></td>
 </tr>
 <tr>
 <td>D4</td>
@@ -584,7 +583,7 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <td><strong>Critique</strong></td>
 <td>Oui</td>
 <td><strong>Oui</strong> (11:16, secret lu via D1)</td>
-<td>À appliquer</td>
+<td>Corrigé, <strong>non déployé</strong></td>
 </tr>
 <tr>
 <td>D5</td>
@@ -594,7 +593,7 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <td><strong>Majeur</strong></td>
 <td>Oui</td>
 <td>Exposé (non ciblé)</td>
-<td>À appliquer</td>
+<td>Corrigé, <strong>non déployé</strong></td>
 </tr>
 <tr>
 <td>D6</td>
@@ -604,7 +603,7 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <td><strong>Majeur</strong>*</td>
 <td>Oui (audit Git)</td>
 <td>Non observée</td>
-<td>À appliquer</td>
+<td>Partiel †, <strong>non déployé</strong></td>
 </tr>
 <tr>
 <td>D7</td>
@@ -614,7 +613,7 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <td><strong>Majeur</strong></td>
 <td>Oui (sans payload)</td>
 <td>Non observée</td>
-<td>À appliquer</td>
+<td>Corrigé, <strong>non déployé</strong></td>
 </tr>
 <tr>
 <td>D8</td>
@@ -624,13 +623,19 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <td><strong>Mineur</strong></td>
 <td>Oui</td>
 <td><strong>Oui</strong> (11:18, tracebacks)</td>
-<td>À appliquer</td>
+<td>Corrigé, <strong>non déployé</strong></td>
 </tr>
 </tbody></table></div>
 
 <p>
 
 * Évaluation de l'annexe 5. La clé <code>sk_test_…</code> étant encore dans le code actuel, nous réévaluons l'exploitation en <strong>Facile</strong>, soit un risque <strong>Critique</strong> (voir D6).
+† Clé retirée du code (commit <code>fa3ec78</code>, 13/11/2026), mais ni révoquée côté Stripe ni purgée de l'historique Git — voir D6.
+</p>
+
+<p>
+
+<strong>« Non déployé »</strong> : le correctif existe dans le dépôt GitHub mais n'a pas encore été mis en ligne. <strong>Tant qu'il n'est pas déployé, les huit vulnérabilités restent exploitables sur l'environnement actuellement actif</strong> (pré-production, et donc production le jour où elle sera remise en ligne dans le même état). Corriger le code ne protège personne avant sa mise en production.
 </p>
 
 <p>
@@ -648,7 +653,7 @@ Localiser dans le code les vulnérabilités du rapport de pentest (annexe 5), le
 <li>
 
 
-Aucune des huit vulnérabilités remontées en juin 2026 n'a été corrigée. Les quatre critiques ont toutes servi à l'attaque.
+Les huit vulnérabilités remontées en juin 2026 sont restées non corrigées jusqu'à l'attaque du 7 novembre ; les quatre critiques ont toutes servi à l'intrusion. Le code a depuis été corrigé pour D1 à D5, D7 et D8 (commit <code>fa3ec78</code>, 13/11/2026) ; D6 reste partiel (voir note ci-dessus). <strong>Aucun de ces correctifs n'est pour l'instant déployé : la plateforme reste vulnérable en l'état tant que ce code n'est pas mis en ligne.</strong>
 
 </li>
 
@@ -1098,7 +1103,7 @@ Les colonnes sélectionnées sont mappées positionnellement sur le modèle <cod
 
 <p>
 
-<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>GET /api/rooms/?category=x'%20OR%20'1'='1'--%20-</code> doit renvoyer <code>200 []</code>. La requête <code>UNION SELECT</code> de l'attaquant ne doit plus renvoyer de données de <code>bookings</code>.
+<strong>Correctif et re-test</strong> : <em>statut : <strong>corrigé</strong> dans le code (<code>rooms_api.py</code> utilise désormais <code>Room.query.filter_by(category=category)</code>, commit <code>fa3ec78</code>, 13/11/2026) — <strong>non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.</strong> Re-test à faire après déploiement.</em> Rejouer la requête de l'attaque : <code>GET /api/rooms/?category=x'%20OR%20'1'='1'--%20-</code> doit renvoyer <code>200 []</code>. La requête <code>UNION SELECT</code> de l'attaquant ne doit plus renvoyer de données de <code>bookings</code>.
 </p>
 
 <hr />
@@ -1208,7 +1213,7 @@ Payload : <code>../../../../../etc/passwd</code>
 
 <p>
 
-<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>GET /api/uploads/?name=../app.py</code> et <code>?name=../../etc/passwd</code> doivent renvoyer <code>404</code> (ou <code>400</code>), sans contenu.
+<strong>Correctif et re-test</strong> : <em>statut : <strong>corrigé</strong> dans le code (<code>uploads_api.py</code> valide désormais le nom via <code>os.path.basename()</code> + <code>os.path.realpath()</code> avec vérification du préfixe, commit <code>fa3ec78</code>, 13/11/2026) — <strong>non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.</strong> Re-test à faire après déploiement.</em> Rejouer la requête de l'attaque : <code>GET /api/uploads/?name=../app.py</code> et <code>?name=../../etc/passwd</code> doivent renvoyer <code>404</code> (ou <code>400</code>), sans contenu.
 </p>
 
 <hr />
@@ -1313,7 +1318,7 @@ Payload : <code>checkout_session_id=../../checkout/sessions%23</code>
 
 <p>
 
-<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>GET /api/bookings/&lt;réf. payée&gt;/checkout-lines?checkout_session_id=../../customers%23</code> doit renvoyer <code>400</code>, et un <code>checkout_session_id</code> différent de celui enregistré pour la réservation doit être refusé.
+<strong>Correctif et re-test</strong> : <em>statut : <strong>corrigé</strong> dans le code (<code>checkout_session_id</code> est désormais lu depuis <code>booking.stripe_checkout_session_id</code> côté serveur, plus depuis le paramètre client, et validé par une regex <code>^cs_[A-Za-z0-9_]+$</code>, commit <code>fa3ec78</code>, 13/11/2026) — <strong>non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.</strong> Re-test à faire après déploiement.</em> Rejouer la requête de l'attaque : <code>GET /api/bookings/&lt;réf. payée&gt;/checkout-lines?checkout_session_id=../../customers%23</code> doit renvoyer <code>400</code>, et un <code>checkout_session_id</code> différent de celui enregistré pour la réservation doit être refusé.
 </p>
 
 <hr />
@@ -1445,7 +1450,7 @@ le secret est transmis <strong>dans l'URL</strong> de redirection (<code>success
 
 <p>
 
-<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : Le bruteforce Intruder (SHA-512 des timestamps autour de la création) doit renvoyer uniquement des <code>422</code>. Le secret généré doit faire 64 caractères hexadécimaux aléatoires, sans lien avec l'heure.
+<strong>Correctif et re-test</strong> : <em>statut : <strong>corrigé</strong> dans le code (<code>checkout_confirmation_secret = secrets.token_hex(32)</code> remplace le hash du timestamp, commit <code>fa3ec78</code>, 13/11/2026) — <strong>non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.</strong> Re-test à faire après déploiement.</em> Rejouer la requête de l'attaque : le bruteforce Intruder (SHA-512 des timestamps autour de la création) doit renvoyer uniquement des <code>422</code>. Le secret généré doit faire 64 caractères hexadécimaux aléatoires, sans lien avec l'heure.
 </p>
 
 <hr />
@@ -1558,7 +1563,7 @@ L'e-mail ne doit être renvoyé que par une route authentifiée (<code>/users/me
 
 <p>
 
-<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>GET /api/rooms/1</code> et <code>GET /api/rooms/</code> ne doivent plus contenir de champ <code>host.email</code>.
+<strong>Correctif et re-test</strong> : <em>statut : <strong>corrigé</strong> dans le code (<code>rooms_models.py</code> utilise désormais <code>self.host_user.to_public_dict()</code>, commit <code>fa3ec78</code>, 13/11/2026) — <strong>non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.</strong> Re-test à faire après déploiement.</em> Rejouer la requête de l'attaque : <code>GET /api/rooms/1</code> et <code>GET /api/rooms/</code> ne doivent plus contenir de champ <code>host.email</code>.
 </p>
 
 <hr />
@@ -1715,7 +1720,7 @@ Intégrer un scanner de secrets (Gitleaks, TruffleHog) en pre-commit et en CI po
 
 <p>
 
-<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>gitleaks git .</code> doit renvoyer 0 secret Stripe, et les anciennes clés doivent apparaître comme révoquées dans le dashboard Stripe.
+<strong>Correctif et re-test</strong> : <em>statut : <strong>corrigé partiellement, et non déployé</strong>. La clé n'est plus codée en dur (<code>docker-compose.yml</code> lit désormais <code>STRIPE_API_KEY</code> depuis l'environnement, commit <code>fa3ec78</code>, 13/11/2026), mais ce commit n'est pas encore en ligne : la clé reste lisible en clair sur l'environnement actuellement déployé. La révocation des deux clés dans le dashboard Stripe et le nettoyage de l'historique Git restent en plus à faire, quel que soit le déploiement : les commits <code>4aec6cd79…</code> et <code>ef5503c</code> contiennent toujours les clés en clair.</em> Rejouer la requête de l'attaque : <code>gitleaks git .</code> doit renvoyer 0 secret Stripe une fois l'historique nettoyé, et les anciennes clés doivent apparaître comme révoquées dans le dashboard Stripe.
 </p>
 
 <hr />
@@ -1883,7 +1888,7 @@ Positionner les en-têtes de sécurité dans le <code>VirtualHost</code> de <cod
 
 <p>
 
-<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>curl -sI https://hackbnb.dashbox.cloud/</code> doit afficher <code>Content-Security-Policy</code>, <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code> et <code>Strict-Transport-Security</code>. Une description <code>&lt;img src=x onerror=alert(1)&gt;</code> doit s'afficher en texte, sans exécution.
+<strong>Correctif et re-test</strong> : <em>statut : <strong>corrigé</strong> dans le code (en-têtes <code>Content-Security-Policy</code> et consorts ajoutés dans <code>apache-prod.conf</code>, <code>dangerouslySetInnerHTML</code> retiré de <code>Room.tsx</code> et <code>Booking.tsx</code>, commit <code>fa3ec78</code>, 13/11/2026) — <strong>non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.</strong> Re-test à faire après déploiement.</em> Rejouer la requête de l'attaque : <code>curl -sI https://hackbnb.dashbox.cloud/</code> doit afficher <code>Content-Security-Policy</code>, <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code> et <code>Strict-Transport-Security</code>. Une description <code>&lt;img src=x onerror=alert(1)&gt;</code> doit s'afficher en texte, sans exécution.
 </p>
 
 <hr />
@@ -2059,7 +2064,7 @@ Masquer les bannières dans <code>apache-prod.conf</code> (<code>mod_headers</co
 
 <p>
 
-<strong>Correctif et re-test</strong> : <em>statut : à appliquer (code non corrigé au 13/11/2026).</em> Après correction, rejouer la requête de l'attaque : <code>curl -sI …/api/</code> ne doit plus afficher <code>Werkzeug</code> ni <code>Python</code>. <code>GET /api/uploads/?name=test.jpg</code> ne doit plus renvoyer de traceback.
+<strong>Correctif et re-test</strong> : <em>statut : <strong>corrigé</strong> dans le code (<code>debug=True</code> retiré de <code>app.py</code>, <code>ServerTokens Prod</code> / <code>ServerSignature Off</code> ajoutés dans <code>apache-prod.conf</code>, commit <code>fa3ec78</code>, 13/11/2026) — <strong>non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.</strong> Re-test à faire après déploiement.</em> Rejouer la requête de l'attaque : <code>curl -sI …/api/</code> ne doit plus afficher <code>Werkzeug</code> ni <code>Python</code>. <code>GET /api/uploads/?name=test.jpg</code> ne doit plus renvoyer de traceback.
 </p>
 
 <hr />
@@ -2097,14 +2102,14 @@ Les correctifs propres à chaque faille sont détaillés en section 6. Cette sec
 <li>
 
 
-<strong>Corriger D1, D2, D3 et D4</strong> (risque critique), puis rejouer les requêtes de l'attaquant pour vérifier qu'elles échouent (section 6, « Correctif et re-test »).
+Corriger D1, D2, D3 et D4 : <strong>fait dans le code</strong> (commit <code>fa3ec78</code>, 13/11/2026), <strong>mais pas déployé</strong> — les failles restent exploitables sur l'environnement en ligne. Déployer, puis rejouer les requêtes de l'attaquant sur la pré-production pour vérifier qu'elles échouent (section 6, « Correctif et re-test »).
 
 </li>
 
 <li>
 
 
-<strong>Désactiver le mode debug</strong> et passer sur un serveur WSGI de production (D8).
+Désactiver le mode debug : <strong>fait dans le code, pas déployé</strong>. <code>debug=True</code> retiré, mais le serveur tourne toujours avec <code>app.run()</code> plutôt qu'un serveur WSGI de production (Gunicorn) — à finaliser (D8).
 
 </li>
 
@@ -2116,14 +2121,14 @@ Les correctifs propres à chaque faille sont détaillés en section 6. Cette sec
 <li>
 
 
-Corriger D5 et D7 et positionner les en-têtes de sécurité.
+Corriger D5 et D7 : <strong>fait dans le code, pas déployé</strong>. Représentation publique sans e-mail, en-têtes de sécurité positionnés (commit <code>fa3ec78</code>, 13/11/2026).
 
 </li>
 
 <li>
 
 
-Purger l'historique Git des secrets (<code>git filter-repo</code>) et ajouter Gitleaks en hook <code>pre-commit</code> et en CI (D6).
+Purger l'historique Git des secrets (<code>git filter-repo</code>) et ajouter Gitleaks en hook <code>pre-commit</code> et en CI (D6) — toujours à faire, les clés sont toujours lisibles dans les commits <code>4aec6cd79…</code> et <code>ef5503c</code>.
 
 </li>
 
@@ -2141,10 +2146,17 @@ Ne plus transmettre <code>checkout_confirmation_secret</code> dans l'URL de reto
 
 </li>
 
+<li>
+
+
+<strong>Épingler la version d'Apache</strong> : <code>prod.dockerfile</code> installe <code>apache2</code> via <code>apt install -y apache2</code> sans version fixée, donc sans garantie sur la version réellement déployée ni sur le suivi des correctifs de sécurité (distinct de D8, qui ne fait que masquer la bannière de version). Fixer une version (ex. <code>apache2=2.4.68*</code>), suivre les avis de sécurité Debian/Apache, et planifier des mises à jour régulières plutôt que de dépendre de l'état des dépôts au moment du build.
+
+</li>
+
 </ol>
 
 <h3 id="moyen-terme-détection-et-prévention">Moyen terme (détection et prévention)</h3>
-<ol start="10">
+<ol start="11">
 
 <li>
 
